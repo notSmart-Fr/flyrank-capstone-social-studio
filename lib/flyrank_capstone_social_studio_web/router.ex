@@ -21,6 +21,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
     post "/campaign-posts/:id/approve", VariantController, :approve
     post "/campaign-posts/:id/reject", VariantController, :reject
     post "/campaign-posts/:id/schedule", VariantController, :schedule
+    post "/slots/:id/publish", SlotController, :publish
   end
 
   scope "/", FlyrankCapstoneSocialStudioWeb do
