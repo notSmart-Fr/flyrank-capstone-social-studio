@@ -114,4 +114,21 @@ defmodule FlyrankCapstoneSocialStudio.Content do
 
     trimmed_content <> hashtags
   end
+  @doc """
+  Approves a variant after re-validating platform constraint rules.
+  """
+  def approve_variant(%Variant{} = variant) do
+    variant
+    |> Variant.changeset(%{status: "approved"})
+    |> Repo.update()
+  end
+
+  @doc """
+  Rejects a variant with an optional rejection reason.
+  """
+  def reject_variant(%Variant{} = variant, reason \\ "Content rejected by reviewer") do
+    variant
+    |> Variant.changeset(%{status: "rejected", rejection_reason: reason})
+    |> Repo.update()
+  end
 end
