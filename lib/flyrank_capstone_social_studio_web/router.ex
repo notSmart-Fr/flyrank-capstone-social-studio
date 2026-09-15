@@ -13,6 +13,11 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
   pipeline :api do
     plug :accepts, ["json"]
   end
+  scope "/api", FlyrankCapstoneSocialStudioWeb do
+    pipe_through :api
+
+    post "/blog-posts", PostController, :create
+  end
 
   scope "/", FlyrankCapstoneSocialStudioWeb do
     pipe_through :browser
