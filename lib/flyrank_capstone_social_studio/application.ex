@@ -13,7 +13,8 @@ defmodule FlyrankCapstoneSocialStudio.Application do
       {DNSCluster,
        query: Application.get_env(:flyrank_capstone_social_studio, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: FlyrankCapstoneSocialStudio.PubSub},
-      # Start a worker by calling: FlyrankCapstoneSocialStudio.Worker.start_link(arg)
+      # Start the background worker scheduler
+      FlyrankCapstoneSocialStudio.Publishing.Scheduler,
       # {FlyrankCapstoneSocialStudio.Worker, arg},
       # Start to serve requests, typically the last entry
       FlyrankCapstoneSocialStudioWeb.Endpoint
