@@ -222,4 +222,10 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   def adapter_for_platform("mock_x"), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
   def adapter_for_platform("mock_linkedin"), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn
   def adapter_for_platform(_), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
+  @doc """
+  Dispatches publication of a scheduled slot with idempotency guarantees.
+  """
+  def dispatch_slot(slot, opts \\ []) do
+    FlyrankCapstoneSocialStudio.Publishing.Dispatcher.dispatch_slot(slot, opts)
+  end
 end
