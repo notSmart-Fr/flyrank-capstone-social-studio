@@ -212,17 +212,18 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
       |> Repo.one!()
 
       case Repo.one(from(s in Slot, where: s.variant_id == ^variant.id, order_by: [desc: s.inserted_at], limit: 1)) do
+        %Slot{status: "failed"} = failed_slot ->
+          {:ok, retry_slot} = update_slot(failed_slot, %{status: "pending", scheduled_at: DateTime.utc_now()})
+          enqueue_publish_job(retry_slot)
+          retry_slot
+
         %Slot{} = existing_slot ->
           existing_slot
 
         nil ->
           case %Slot{} |> Slot.changeset(string_attrs) |> Repo.insert() do
             {:ok, slot} ->
-              scheduled_at = slot.scheduled_at || DateTime.utc_now()
-
-              %{slot_id: slot.id}
-              |> FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker.new(scheduled_at: scheduled_at)
-              |> Oban.insert!()
+              enqueue_publish_job(slot)
 
               slot
 
@@ -235,6 +236,14 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
 
   def schedule_variant(%Variant{} = _variant, _attrs) do
     {:error, :unapproved_variant}
+  end
+
+  defp enqueue_publish_job(slot) do
+    scheduled_at = slot.scheduled_at || DateTime.utc_now()
+
+    %{slot_id: slot.id}
+    |> FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker.new(scheduled_at: scheduled_at)
+    |> Oban.insert!()
   end
 
   @doc """

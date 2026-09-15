@@ -138,7 +138,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   def get_campaign_details(post_id) do
     from(p in Post,
       where: p.id == ^post_id,
-      preload: :variants
+      preload: [variants: :slots]
     )
     |> Repo.one()
   end

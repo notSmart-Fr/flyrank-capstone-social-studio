@@ -100,6 +100,17 @@ defmodule FlyrankCapstoneSocialStudioWeb.StudioLive do
   end
 
   @impl true
+  def handle_info({:slot_failed, _slot}, socket) do
+    selected_post = if socket.assigns.selected_post, do: Content.get_campaign_details(socket.assigns.selected_post.id), else: nil
+    history = Publishing.list_history()
+
+    {:noreply,
+     socket
+     |> assign(selected_post: selected_post, history: history)
+     |> put_flash(:error, "Publishing failed. You can retry the publication.")}
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <div class="min-h-screen bg-base-200 p-6 font-sans">

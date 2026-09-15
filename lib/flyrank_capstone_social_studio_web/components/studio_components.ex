@@ -115,7 +115,14 @@ defmodule FlyrankCapstoneSocialStudioWeb.StudioComponents do
             <button phx-click="reject_variant" phx-value-id={@variant.id} class="btn btn-xs btn-error text-white">Reject</button>
           <% end %>
           <%= if @variant.status == "approved" do %>
-            <button phx-click="schedule_variant" phx-value-id={@variant.id} class="btn btn-xs btn-primary phx-click-loading:pointer-events-none phx-click-loading:loading" phx-disable-with="Publishing...">Publish Now</button>
+            <%= case latest_slot_status(@variant) do %>
+              <% "pending" -> %>
+                <button class="btn btn-xs btn-primary loading" disabled>Scheduled for publish</button>
+              <% "failed" -> %>
+                <button phx-click="schedule_variant" phx-value-id={@variant.id} class="btn btn-xs btn-warning phx-click-loading:pointer-events-none phx-click-loading:loading" phx-disable-with="Retrying...">Retry publish</button>
+              <% _ -> %>
+                <button phx-click="schedule_variant" phx-value-id={@variant.id} class="btn btn-xs btn-primary phx-click-loading:pointer-events-none phx-click-loading:loading" phx-disable-with="Publishing...">Publish Now</button>
+            <% end %>
           <% end %>
           <%= if @variant.status == "published" do %>
             <span class="text-xs text-success font-semibold py-1">Sent</span>
@@ -143,10 +150,11 @@ defmodule FlyrankCapstoneSocialStudioWeb.StudioComponents do
         <h2 class="card-title text-md">Publishing History Audit Log</h2>
         <div class="overflow-x-auto">
           <table class="table table-xs w-full">
-            <thead><tr><th>Slot</th><th>Status</th><th>External ID</th><th>Attempted At</th></tr></thead>
+            <thead><tr><th>Platform</th><th>Slot</th><th>Status</th><th>External ID</th><th>Attempted At</th></tr></thead>
             <tbody>
               <%= for attempt <- @history do %>
                 <tr>
+                  <td>{attempt.slot.variant.platform}</td>
                   <td>{attempt.slot_id}</td>
                   <td><.status_badge status={attempt.status} /></td>
                   <td class="font-mono">{attempt.external_post_id}</td>
@@ -164,6 +172,15 @@ defmodule FlyrankCapstoneSocialStudioWeb.StudioComponents do
   defp platform_options do
     [{"telegram", "Telegram"}, {"mock_x", "X (Twitter)"}, {"mock_linkedin", "LinkedIn"}]
   end
+
+  defp latest_slot_status(%{slots: slots}) when is_list(slots) do
+    case Enum.max_by(slots, & &1.inserted_at, fn -> nil end) do
+      nil -> nil
+      slot -> slot.status
+    end
+  end
+
+  defp latest_slot_status(_variant), do: nil
 
   defp status_class("approved"), do: "badge-success"
   defp status_class("rejected"), do: "badge-error"

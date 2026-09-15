@@ -13,6 +13,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
     field :rejection_reason, :string
 
     belongs_to :post, FlyrankCapstoneSocialStudio.Content.Post
+    has_many :slots, FlyrankCapstoneSocialStudio.Publishing.Slot
 
     timestamps()
   end
