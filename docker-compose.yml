@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:17-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: flyrank_capstone_social_studio_prod
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: on-failure
+    ports:
+      - "4000:4000"
+    environment:
+      PORT: "4000"
+      DATABASE_URL: "ecto://postgres:postgrespassword@db:5432/flyrank_capstone_social_studio_prod"
+      SECRET_KEY_BASE: "8K1vVzY5Q9xLpN2rM4wE7tJ0sB3cDxFgHiJkLmNoPqRsTuVwXyZaBcDeFgHiJkLm"
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
