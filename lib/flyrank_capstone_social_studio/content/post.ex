@@ -9,13 +9,16 @@ defmodule FlyrankCapstoneSocialStudio.Content.Post do
     field :url, :string
     field :external_source_id, :string
 
-    timestamps(type: :utc_datetime)
+    has_many :variants, FlyrankCapstoneSocialStudio.Content.Variant
+
+    timestamps()
   end
 
   @doc false
   def changeset(post, attrs) do
     post
     |> cast(attrs, [:title, :source_type, :content, :url, :external_source_id])
-    |> validate_required([:title, :source_type, :content, :url, :external_source_id])
+    |> validate_required([:title, :source_type, :content]) # Keep url and external_source_id optional
+    |> validate_inclusion(:source_type, ["url", "markdown"])
   end
 end
