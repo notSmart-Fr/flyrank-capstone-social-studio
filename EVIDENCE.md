@@ -21,3 +21,23 @@ Result: 2 passed
 
 1. `ingest_and_generate/2` creates a post and two draft variants for the requested `telegram` and `mock_x` platforms.
 2. `mock_x` content exceeding the 280-character limit and two-hashtag limit is rejected with explicit changeset errors naming both violated rules.
+
+## Phase 3: Review Workflow
+
+### Requirement: Review Workflow & Unapproved Schedule Prevention
+- **Status:** PASS
+- **Proof:** Run `mix test test/flyrank_capstone_social_studio/review_workflow_test.exs`
+
+#### Command Transcript & Output:
+```powershell
+PS I:\projects\flyrank-capstone-social-studio> mix test test/flyrank_capstone_social_studio/review_workflow_test.exs
+Compiling 1 file (.ex)
+warning: Failed to symlink node_modules folder for colocated assets: :eperm
+
+Running ExUnit with seed: 290859, max_cases: 32
+
+...
+Finished in 0.06 seconds (0.00s async, 0.06s sync)
+
+Result: 3 passed
+```

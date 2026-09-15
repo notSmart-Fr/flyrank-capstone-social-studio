@@ -202,10 +202,13 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   Schedules a variant. Refuses with an error tuple if the variant is not approved.
   """
   def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
-    attrs_with_variant = Map.put(attrs, "variant_id", variant.id)
+    string_attrs =
+      attrs
+      |> Map.new(fn {k, v} -> {to_string(k), v} end)
+      |> Map.put("variant_id", variant.id)
 
     %Slot{}
-    |> Slot.changeset(attrs_with_variant)
+    |> Slot.changeset(string_attrs)
     |> Repo.insert()
   end
 
