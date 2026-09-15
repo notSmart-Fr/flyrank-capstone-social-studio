@@ -8,7 +8,8 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.PublishAttempt do
     field :external_post_id, :string
     field :response_payload, :map
     field :error_message, :string
-    field :slot_id, :id
+    belongs_to :slot, FlyrankCapstoneSocialStudio.Publishing.Slot
+
 
     timestamps(type: :utc_datetime)
   end

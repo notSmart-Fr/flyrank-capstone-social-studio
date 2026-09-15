@@ -17,6 +17,28 @@ Finished in 0.05 seconds (0.00s async, 0.05s sync)
 Result: 2 passed
 ```
 
+## Phase 5: Durable Scheduler & History Audit Logs
+
+### Requirement: Oban Background Execution & History Logging
+- **Status:** PASS
+- **Proof:** Run `mix test test/flyrank_capstone_social_studio/durable_scheduler_test.exs`
+
+#### Command Transcript & Output:
+```powershell
+PS I:\projects\flyrank-capstone-social-studio> mix test test/flyrank_capstone_social_studio/durable_scheduler_test.exs
+Running ExUnit with seed: 710293, max_cases: 32
+
+..
+Finished in 0.08 seconds (0.02s async, 0.06s sync)
+
+Result: 2 passed
+```
+
+#### Verified Invariant Behaviors:
+
+1. The Oban publishing worker is enqueued and executes the scheduled slot, transitioning it to `published`.
+2. A successful publishing attempt is recorded in the history audit log with the slot ID, success status, and external post ID.
+
 #### Verified Invariant Behaviors:
 
 1. `ingest_and_generate/2` creates a post and two draft variants for the requested `telegram` and `mock_x` platforms.
