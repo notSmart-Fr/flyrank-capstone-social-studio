@@ -3,7 +3,7 @@ import Config
 # Configure your database
 config :flyrank_capstone_social_studio, FlyrankCapstoneSocialStudio.Repo,
   username: "postgres",
-  password: "postgres",
+  password: "postgrespassword",
   hostname: "localhost",
   database: "flyrank_capstone_social_studio_dev",
   stacktrace: true,

@@ -56,7 +56,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
   scope "/", FlyrankCapstoneSocialStudioWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", StudioLive
     live_dashboard "/dashboard", metrics: FlyrankCapstoneSocialStudioWeb.Telemetry
   end
 

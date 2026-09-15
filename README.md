@@ -26,7 +26,7 @@ From the repository root, build the Phoenix image and start PostgreSQL and the A
 docker compose up --build
 ```
 
-Compose starts the `db` service first and waits for PostgreSQL to become healthy before starting the `app` service. The API will then be available at `http://localhost:4000`.
+Compose starts the `db` service first and waits for PostgreSQL to become healthy before starting the `web` service. PostgreSQL runs inside Docker; no separate PostgreSQL installation is required on the host. The API will then be available at `http://localhost:4000`.
 
 To start the services in the background:
 
@@ -38,7 +38,7 @@ Check the service status and follow application logs with:
 
 ```bash
 docker compose ps
-docker compose logs -f app
+docker compose logs -f web
 ```
 
 To stop the containers while keeping the PostgreSQL data volume:
@@ -53,42 +53,7 @@ To stop the containers and remove the PostgreSQL data volume, useful for a clean
 docker compose down -v
 ```
 
-The Compose configuration provides the production database URL and Phoenix port automatically. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in a `.env` file in the repository root when using the live Telegram adapter.
-
-## Quick Start (Local Development)
-
-### Prerequisites
-
-- Elixir 1.20.4 and Erlang/OTP 29
-- PostgreSQL 16+
-
-### Setup
-
-1. Clone the repository and install dependencies:
-
-	```bash
-	mix deps.get
-	```
-
-2. Set the required environment variables from `.env.example`.
-
-3. Set up the database and run migrations:
-
-	```bash
-	mix ecto.setup
-	```
-
-4. Run the Phoenix server:
-
-	```bash
-	mix phx.server
-	```
-
-5. Run the full ExUnit test suite:
-
-	```bash
-	mix test
-	```
+The Compose configuration provides the database URL, Phoenix port, and database migrations automatically. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in a `.env` file in the repository root when using the live Telegram adapter.
 
 ## API Endpoints
 
@@ -102,3 +67,6 @@ The Compose configuration provides the production database URL and Phoenix port 
 | `POST` | `/api/campaign-posts/:id/schedule` | Schedules an approved variant. |
 | `POST` | `/api/slots/:id/publish` | Triggers immediate idempotent dispatch. |
 | `GET` | `/api/publishing/history` | Returns the audit trail of publication attempts. |
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

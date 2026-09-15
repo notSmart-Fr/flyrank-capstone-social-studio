@@ -208,20 +208,27 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
       |> Map.put("variant_id", variant.id)
 
     Repo.transaction(fn ->
-      case %Slot{} |> Slot.changeset(string_attrs) |> Repo.insert() do
-        {:ok, slot} ->
-          # Calculate scheduled time or fallback to now
-          scheduled_at = slot.scheduled_at || DateTime.utc_now()
+      from(v in Variant, where: v.id == ^variant.id, lock: "FOR UPDATE")
+      |> Repo.one!()
 
-          # Enqueue durable Oban job scheduled at slot.scheduled_at
-          %{slot_id: slot.id}
-          |> FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker.new(scheduled_at: scheduled_at)
-          |> Oban.insert!()
+      case Repo.one(from(s in Slot, where: s.variant_id == ^variant.id, order_by: [desc: s.inserted_at], limit: 1)) do
+        %Slot{} = existing_slot ->
+          existing_slot
 
-          slot
+        nil ->
+          case %Slot{} |> Slot.changeset(string_attrs) |> Repo.insert() do
+            {:ok, slot} ->
+              scheduled_at = slot.scheduled_at || DateTime.utc_now()
 
-        {:error, changeset} ->
-          Repo.rollback(changeset)
+              %{slot_id: slot.id}
+              |> FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker.new(scheduled_at: scheduled_at)
+              |> Oban.insert!()
+
+              slot
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
       end
     end)
   end

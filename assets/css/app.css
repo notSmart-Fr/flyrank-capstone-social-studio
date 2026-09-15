@@ -14,14 +14,12 @@
 @plugin "../vendor/heroicons";
 
 /* daisyUI Tailwind Plugin. */
-@plugin "daisyui/packages/bundle/daisyui" {
-  themes: false;
-}
+@plugin "daisyui";
 
 /* daisyUI theme plugin.
-  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
-  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
-@plugin "daisyui/packages/bundle/daisyui-theme" {
+   We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
+   on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
+@plugin "daisyui/theme" {
   name: "dark";
   default: false;
   prefersdark: true;
@@ -56,7 +54,7 @@
   --noise: 0;
 }
 
-@plugin "daisyui/packages/bundle/daisyui-theme" {
+@plugin "daisyui/theme" {
   name: "light";
   default: true;
   prefersdark: false;
@@ -101,5 +99,3 @@
 
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
-
-/* This file is for your main application CSS */
