@@ -17,6 +17,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
     pipe_through :api
 
     post "/blog-posts", PostController, :create
+    patch "/campaign-posts/:id", VariantController, :update
+    post "/campaign-posts/:id/approve", VariantController, :approve
+    post "/campaign-posts/:id/reject", VariantController, :reject
+    post "/campaign-posts/:id/schedule", VariantController, :schedule
   end
 
   scope "/", FlyrankCapstoneSocialStudioWeb do
