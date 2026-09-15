@@ -1,37 +1,39 @@
+
 services:
   db:
-    image: postgres:17-alpine
-    restart: always
+    image: postgres:16-alpine
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: flyrank_capstone_social_studio_prod
+      POSTGRES_DB: flyrank_capstone_social_studio_dev
     ports:
       - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "PGPASSWORD=$$POSTGRES_PASSWORD psql -U $$POSTGRES_USER -d $$POSTGRES_DB -c 'SELECT 1' >/dev/null"]
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 30s  # Gives Postgres 30 seconds to initialize before failing checks
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-  app:
+  web:
     build:
       context: .
       dockerfile: Dockerfile
-    restart: on-failure
     ports:
       - "4000:4000"
     environment:
-      PORT: "4000"
-      DATABASE_URL: "ecto://postgres:postgrespassword@db:5432/flyrank_capstone_social_studio_prod"
-      SECRET_KEY_BASE: "8K1vVzY5Q9xLpN2rM4wE7tJ0sB3cDxFgHiJkLmNoPqRsTuVwXyZaBcDeFgHiJkLm"
-      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
-      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+      DATABASE_URL: ecto://postgres:postgrespassword@db:5432/flyrank_capstone_social_studio_dev
+      SECRET_KEY_BASE: "xiebGTrii7MqFZcmpVS00AzE+d8NsT+34GCHKm3QbJlew96iK3AvIBr7oItd7fi5"
+      PHX_HOST: localhost
+      PORT: 4000
+      PHX_SERVER: "true"
     depends_on:
       db:
         condition: service_healthy
+    # Runs DB migrations using the generated script, then starts the server
+    command: ["sh", "-c", "/app/bin/migrate && /app/bin/server"]
 
 volumes:
   postgres_data:

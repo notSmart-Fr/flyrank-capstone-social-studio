@@ -60,7 +60,7 @@ The Compose configuration provides the production database URL and Phoenix port 
 ### Prerequisites
 
 - Elixir 1.20.4 and Erlang/OTP 29
-- PostgreSQL 17
+- PostgreSQL 16+
 
 ### Setup
 

@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+
+cd -P -- "$(dirname -- "$0")"
+exec ./flyrank_capstone_social_studio eval FlyrankCapstoneSocialStudio.Release.migrate

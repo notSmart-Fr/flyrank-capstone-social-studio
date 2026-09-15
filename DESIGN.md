@@ -16,7 +16,6 @@ Each platform profile defines the maximum rendered length, expected tone, and ha
 | --- | ---: | --- | ---: |
 | Telegram | 2,000 characters | Conversational and informative | 5 |
 | Discord | 2,000 characters | Conversational, community-oriented, and informative | 5 |
-| Mastodon | 2,000 characters | Conversational, concise, and authentic | 5 |
 | Mock X (Twitter) | 280 characters | Concise and direct | 2 |
 | Mock LinkedIn | 3,000 characters | Professional and insight-oriented | 5 |
 
@@ -29,37 +28,91 @@ The core surface is organized around campaigns and their platform posts. JSON re
 ### Ingestion
 
 - `POST /api/blog-posts` creates or ingests a source blog post.
-- `POST /api/campaigns` creates a campaign from a blog post and requested target platforms.
 - `GET /api/campaigns/:id` returns the campaign, source post, platform drafts, statuses, and validation results.
-- `POST /api/campaigns/:id/regenerate` regenerates drafts using the selected constraint profiles.
-
-Ingestion should accept an optional external source identifier. When supplied, that identifier can be used to safely retry ingestion without creating a duplicate source post.
 
 ### Review and Approval
 
-- `GET /api/campaigns/:id/posts` lists the generated platform posts and their validation state.
 - `PATCH /api/campaign-posts/:id` updates editable draft content or metadata while the post is in draft or rejected status.
-- `POST /api/campaign-posts/:id/approve` approves a valid post for scheduling or immediate publication.
-- `POST /api/campaign-posts/:id/reject` returns a post to the editing workflow with an optional review note.
+- `POST /api/campaign-posts/:id/approve` approves a variant for scheduling.
+- `POST /api/campaign-posts/:id/reject` rejects a variant with a reason.
 
 Approval is a state transition, not a replacement for validation. The server must revalidate the final content and reject approval when the selected constraint profile is violated.
 
 ### Scheduling and Publishing
 
-- `POST /api/campaign-posts/:id/publish` publishes an approved post immediately through its platform adapter.
-- `POST /api/campaign-posts/:id/schedule` schedules an approved post for a specified time and timezone.
-- `DELETE /api/campaign-posts/:id/schedule` cancels a pending schedule.
+- `POST /api/campaign-posts/:id/schedule` schedules an approved variant.
+- `POST /api/slots/:id/publish` triggers immediate idempotent dispatch for a scheduled slot.
 
 Publishing requests must accept an idempotency key, for example through the `Idempotency-Key` header. The key should be stored with the publication attempt and scoped to the campaign post. A repeated request with the same key returns the original result; a request that reuses the key with different content or target data returns a conflict. Platform adapters should also use their own external publication identifier when available.
 
 ### History Queries
 
-- `GET /api/campaigns/:id/history` lists state changes, review actions, scheduled jobs, and publication attempts in chronological order.
-- `GET /api/campaign-posts/:id/publications` lists all publication attempts and their external identifiers, response status, error details, and timestamps.
+- `GET /api/publishing/history` returns the audit trail of publication attempts, including external identifiers, response status, error details, and timestamps.
 
 History is append-only from the API consumer's perspective. Failed retries should be visible without overwriting the original attempt, while an idempotent replay should reference the existing successful result instead of adding a duplicate publication.
 
-## 4. Explicit Non-Goal
+## 4. Database and Publishing Workflow
+
+```mermaid
+sequenceDiagram
+	autonumber
+	actor User as User / API Client
+	participant App as Phoenix App (Context)
+	participant DB_Posts as DB: posts
+	participant DB_Variants as DB: variants
+	participant DB_Slots as DB: slots
+	participant DB_Oban as DB: oban_jobs
+	participant Worker as Oban.PublishWorker
+	participant Platform as Platform API (Telegram/Discord/X)
+	participant DB_Attempts as DB: publish_attempts
+
+	%% Phase 1: Ingestion
+	rect rgb(240, 244, 248)
+	note right of User: Phase 1: Raw Ingestion
+	User->>App: POST raw content / URL
+	App->>DB_Posts: INSERT into posts (title, content, source_type)
+	DB_Posts-->>App: %Post{id: post_id}
+	end
+
+	%% Phase 2: Transformation
+	rect rgb(245, 240, 248)
+	note right of User: Phase 2: Variant Transformation
+	App->>DB_Variants: INSERT into variants (post_id, platform, content, status: "draft")
+	DB_Variants-->>App: %Variant{id: variant_id}
+	end
+
+	%% Phase 3: Scheduling
+	rect rgb(240, 248, 240)
+	note right of User: Phase 3: Scheduling & Idempotency
+	User->>App: Approve variant & pick scheduled_at
+	App->>DB_Slots: INSERT into slots (variant_id, scheduled_at, idempotency_key, status: "pending")
+	DB_Slots-->>App: %Slot{id: slot_id}
+	App->>DB_Oban: INSERT into oban_jobs (args: %{slot_id: slot_id}, scheduled_at, state: "scheduled")
+	DB_Oban-->>App: Job enqueued
+	end
+
+	%% Phase 4: Worker Execution & Audit Logging
+	rect rgb(255, 248, 240)
+	note right of Worker: Phase 4: Execution & Audit Logging
+	Note over DB_Oban,Worker: At scheduled_at timestamp
+	DB_Oban->>Worker: Pick up job %{slot_id: slot_id}
+	Worker->>DB_Slots: Fetch Slot & associated ContentVariant
+	Worker->>Platform: Send POST request (Payload + Idempotency Key)
+
+	alt Request Successful
+		Platform-->>Worker: HTTP 200 OK (external_post_id)
+		Worker->>DB_Slots: UPDATE slots status = "completed"
+		Worker->>DB_Attempts: INSERT into publish_attempts (slot_id, adapter_name, status: "success", response_payload)
+		Worker->>DB_Oban: Mark job state = "completed"
+	else Request Failed / Network Timeout
+		Platform-->>Worker: HTTP Error / Timeout
+		Worker->>DB_Attempts: INSERT into publish_attempts (slot_id, adapter_name, status: "error", error_message)
+		Worker->>DB_Oban: Return {:error, reason} -> Trigger Oban Retry
+	end
+	end
+```
+
+## 5. Explicit Non-Goal
 
 The first version does not include:
 
