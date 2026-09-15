@@ -197,8 +197,9 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
     Slot.changeset(slot, attrs)
   end
 
-  @doc """
+ @doc """
   Schedules a variant. Refuses with an error tuple if the variant is not approved.
+  Enqueues a durable Oban job for execution.
   """
   def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
     string_attrs =
@@ -206,9 +207,23 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
       |> Map.new(fn {k, v} -> {to_string(k), v} end)
       |> Map.put("variant_id", variant.id)
 
-    %Slot{}
-    |> Slot.changeset(string_attrs)
-    |> Repo.insert()
+    Repo.transaction(fn ->
+      case %Slot{} |> Slot.changeset(string_attrs) |> Repo.insert() do
+        {:ok, slot} ->
+          # Calculate scheduled time or fallback to now
+          scheduled_at = slot.scheduled_at || DateTime.utc_now()
+
+          # Enqueue durable Oban job scheduled at slot.scheduled_at
+          %{slot_id: slot.id}
+          |> FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker.new(scheduled_at: scheduled_at)
+          |> Oban.insert!()
+
+          slot
+
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
   end
 
   def schedule_variant(%Variant{} = _variant, _attrs) do

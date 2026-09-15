@@ -10,7 +10,11 @@ import Config
 config :flyrank_capstone_social_studio,
   ecto_repos: [FlyrankCapstoneSocialStudio.Repo],
   generators: [timestamp_type: :utc_datetime]
-
+# Configure Oban
+config :flyrank_capstone_social_studio, Oban,
+  repo: FlyrankCapstoneSocialStudio.Repo,
+  plugins: [Oban.Plugins.Pruner],
+  queues: [default: 10,publishing: 5]
 # Configure the endpoint
 config :flyrank_capstone_social_studio, FlyrankCapstoneSocialStudioWeb.Endpoint,
   url: [host: "localhost"],
