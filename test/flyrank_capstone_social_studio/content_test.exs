@@ -11,7 +11,8 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
         source_type: "markdown"
       }
 
-      assert {:ok, {post, variants}} = Content.ingest_and_generate(post_params, ["telegram", "mock_x"])
+      assert {:ok, {post, variants}} =
+               Content.ingest_and_generate(post_params, ["telegram", "mock_x"])
 
       assert post.id != nil
       assert length(variants) == 2

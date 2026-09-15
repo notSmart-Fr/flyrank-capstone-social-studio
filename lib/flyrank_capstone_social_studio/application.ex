@@ -10,7 +10,8 @@ defmodule FlyrankCapstoneSocialStudio.Application do
     children = [
       FlyrankCapstoneSocialStudioWeb.Telemetry,
       FlyrankCapstoneSocialStudio.Repo,
-      {DNSCluster, query: Application.get_env(:flyrank_capstone_social_studio, :dns_cluster_query) || :ignore},
+      {DNSCluster,
+       query: Application.get_env(:flyrank_capstone_social_studio, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: FlyrankCapstoneSocialStudio.PubSub},
       # Start a worker by calling: FlyrankCapstoneSocialStudio.Worker.start_link(arg)
       # {FlyrankCapstoneSocialStudio.Worker, arg},

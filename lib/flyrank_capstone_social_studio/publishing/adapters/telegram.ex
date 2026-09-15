@@ -27,7 +27,11 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
       end
     else
       # Dry-run mode for local dev / testing without live bot keys
-      {:ok, %{external_id: "telegram-dryrun-#{:erlang.unique_integer([:positive])}", raw_response: "Dry run mode"}}
+      {:ok,
+       %{
+         external_id: "telegram-dryrun-#{:erlang.unique_integer([:positive])}",
+         raw_response: "Dry run mode"
+       }}
     end
   end
 end

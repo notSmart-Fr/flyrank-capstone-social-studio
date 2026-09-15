@@ -4,6 +4,8 @@ defmodule FlyrankCapstoneSocialStudio.PublishingFixtures do
   entities via the `FlyrankCapstoneSocialStudio.Publishing` context.
   """
 
+  import FlyrankCapstoneSocialStudio.ContentFixtures
+
   @doc """
   Generate a publish_attempt.
   """
@@ -26,12 +28,19 @@ defmodule FlyrankCapstoneSocialStudio.PublishingFixtures do
   Generate a slot.
   """
   def slot_fixture(attrs \\ %{}) do
+    variant_id =
+      case Map.get(attrs, :variant_id) || Map.get(attrs, "variant_id") do
+        nil -> variant_fixture().id
+        id -> id
+      end
+
     {:ok, slot} =
       attrs
       |> Enum.into(%{
-        idempotency_key: "some idempotency_key",
+        idempotency_key: "some idempotency_key #{System.unique_integer([:positive])}",
         scheduled_at: ~U[2026-09-13 05:47:00Z],
-        status: "some status"
+        status: "some status",
+        variant_id: variant_id
       })
       |> FlyrankCapstoneSocialStudio.Publishing.create_slot()
 

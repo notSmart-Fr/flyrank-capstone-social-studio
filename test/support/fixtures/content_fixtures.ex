@@ -29,12 +29,10 @@ defmodule FlyrankCapstoneSocialStudio.ContentFixtures do
     {:ok, variant} =
       attrs
       |> Enum.into(%{
-        character_count: 42,
         content: "some content",
-        hashtags_count: 42,
-        platform: "some platform",
-        rejection_reason: "some rejection_reason",
-        status: "some status"
+        platform: "mock_x",
+        rejection_reason: nil,
+        status: "draft"
       })
       |> FlyrankCapstoneSocialStudio.Content.create_variant()
 

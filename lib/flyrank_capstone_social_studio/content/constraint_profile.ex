@@ -22,6 +22,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.ConstraintProfile do
   def count_hashtags(text) when is_binary(text) do
     Regex.scan(~r/#\w+/, text) |> length()
   end
+
   def count_hashtags(_), do: 0
 
   # Private function returning the profile map safely

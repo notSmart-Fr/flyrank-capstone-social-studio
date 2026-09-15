@@ -18,7 +18,8 @@ defmodule FlyrankCapstoneSocialStudio.Content.Post do
   def changeset(post, attrs) do
     post
     |> cast(attrs, [:title, :source_type, :content, :url, :external_source_id])
-    |> validate_required([:title, :source_type, :content]) # Keep url and external_source_id optional
+    # Keep url and external_source_id optional
+    |> validate_required([:title, :source_type, :content])
     |> validate_inclusion(:source_type, ["url", "markdown"])
   end
 end

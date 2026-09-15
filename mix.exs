@@ -89,7 +89,11 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
-      "assets.build": ["compile", "tailwind flyrank_capstone_social_studio", "esbuild flyrank_capstone_social_studio"],
+      "assets.build": [
+        "compile",
+        "tailwind flyrank_capstone_social_studio",
+        "esbuild flyrank_capstone_social_studio"
+      ],
       "assets.deploy": [
         "tailwind flyrank_capstone_social_studio --minify",
         "esbuild flyrank_capstone_social_studio --minify",

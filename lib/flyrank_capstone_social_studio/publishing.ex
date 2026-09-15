@@ -9,7 +9,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   alias FlyrankCapstoneSocialStudio.Publishing.Slot
   alias FlyrankCapstoneSocialStudio.Repo
 
-
   @doc """
   Returns the list of publish_attempts.
 
@@ -104,7 +103,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
     PublishAttempt.changeset(publish_attempt, attrs)
   end
 
-
   @doc """
   Returns the list of slots.
 
@@ -198,6 +196,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   def change_slot(%Slot{} = slot, attrs \\ %{}) do
     Slot.changeset(slot, attrs)
   end
+
   @doc """
   Schedules a variant. Refuses with an error tuple if the variant is not approved.
   """
@@ -215,13 +214,20 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   def schedule_variant(%Variant{} = _variant, _attrs) do
     {:error, :unapproved_variant}
   end
+
   @doc """
   Returns the adapter module associated with a platform string.
   """
-  def adapter_for_platform("telegram"), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram
+  def adapter_for_platform("telegram"),
+    do: FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram
+
   def adapter_for_platform("mock_x"), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
-  def adapter_for_platform("mock_linkedin"), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn
+
+  def adapter_for_platform("mock_linkedin"),
+    do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn
+
   def adapter_for_platform(_), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
+
   @doc """
   Dispatches publication of a scheduled slot with idempotency guarantees.
   """

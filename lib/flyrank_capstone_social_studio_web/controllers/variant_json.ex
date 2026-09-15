@@ -1,6 +1,4 @@
 defmodule FlyrankCapstoneSocialStudioWeb.VariantJSON do
-
-
   def show(%{variant: variant}) do
     %{
       data: %{

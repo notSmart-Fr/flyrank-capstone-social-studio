@@ -41,3 +41,20 @@ Finished in 0.06 seconds (0.00s async, 0.06s sync)
 
 Result: 3 passed
 ```
+
+## Phase 4: Adapters & Idempotency
+
+### Requirement: Idempotent Dispatcher Protection
+- **Status:** PASS
+- **Proof:** Run `mix test test/flyrank_capstone_social_studio/idempotency_test.exs`
+
+#### Command Transcript & Output:
+```powershell
+PS I:\projects\flyrank-capstone-social-studio> mix test test/flyrank_capstone_social_studio/idempotency_test.exs
+Running ExUnit with seed: 250904, max_cases: 32
+
+..
+Finished in 0.1 seconds (0.00s async, 0.1s sync)
+
+Result: 2 passed
+```

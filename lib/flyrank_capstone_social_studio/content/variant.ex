@@ -20,7 +20,15 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
   @doc false
   def changeset(variant, attrs) do
     variant
-    |> cast(attrs, [:post_id, :platform, :content, :status, :hashtags_count, :character_count, :rejection_reason])
+    |> cast(attrs, [
+      :post_id,
+      :platform,
+      :content,
+      :status,
+      :hashtags_count,
+      :character_count,
+      :rejection_reason
+    ])
     |> validate_required([:platform, :content, :status])
     |> validate_inclusion(:status, ["draft", "approved", "rejected", "published"])
     |> validate_inclusion(:platform, ConstraintProfile.supported_platforms())
@@ -68,6 +76,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
       "exceeds maximum character limit of #{max} for #{platform} (got #{actual})"
     )
   end
+
   defp validate_length(changeset, _actual, _max, _platform), do: changeset
 
   defp validate_hashtags(changeset, actual, max, platform) when actual > max do
@@ -77,5 +86,6 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
       "exceeds maximum hashtag count of #{max} for #{platform} (got #{actual})"
     )
   end
+
   defp validate_hashtags(changeset, _actual, _max, _platform), do: changeset
 end

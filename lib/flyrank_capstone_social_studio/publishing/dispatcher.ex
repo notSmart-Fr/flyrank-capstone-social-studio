@@ -36,6 +36,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
 
     attempt_attrs = %{
       slot_id: slot.id,
+      adapter_name: inspect(adapter),
       attempted_at: DateTime.utc_now(),
       status: "pending"
     }
@@ -48,7 +49,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
           Publishing.update_publish_attempt(attempt, %{
             status: "success",
             external_post_id: ext_id,
-            raw_response: response
+            response_payload: %{raw_response: response}
           })
 
         # Mark slot and variant as published

@@ -9,7 +9,12 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX do
       {:error, "Simulated X platform rate limit / connection timeout"}
     else
       external_id = "x-tweet-#{:erlang.unique_integer([:positive])}"
-      {:ok, %{external_id: external_id, raw_response: "Mock X tweet published: #{String.slice(content, 0, 30)}..."}}
+
+      {:ok,
+       %{
+         external_id: external_id,
+         raw_response: "Mock X tweet published: #{String.slice(content, 0, 30)}..."
+       }}
     end
   end
 end

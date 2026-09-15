@@ -114,6 +114,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
 
     trimmed_content <> hashtags
   end
+
   @doc """
   Approves a variant after re-validating platform constraint rules.
   """

@@ -55,12 +55,16 @@ defmodule FlyrankCapstoneSocialStudioWeb.VariantController do
       {:ok, slot} ->
         conn
         |> put_status(:created)
-        |> json(%{data: %{slot_id: slot.id, status: slot.status, scheduled_at: slot.scheduled_at}})
+        |> json(%{
+          data: %{slot_id: slot.id, status: slot.status, scheduled_at: slot.scheduled_at}
+        })
 
       {:error, :unapproved_variant} ->
         conn
         |> put_status(:forbidden)
-        |> json(%{error: "Cannot schedule unapproved variant. Current status is '#{variant.status}'."})
+        |> json(%{
+          error: "Cannot schedule unapproved variant. Current status is '#{variant.status}'."
+        })
 
       {:error, changeset} ->
         conn
