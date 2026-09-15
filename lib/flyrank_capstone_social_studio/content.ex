@@ -132,4 +132,14 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     |> Variant.changeset(%{status: "rejected", rejection_reason: reason})
     |> Repo.update()
   end
+  @doc """
+  Retrieves a blog post with all its variants and associated scheduled slots.
+  """
+  def get_campaign_details(post_id) do
+    from(p in Post,
+      where: p.id == ^post_id,
+      preload: [variants: :slots]
+    )
+    |> Repo.one()
+  end
 end

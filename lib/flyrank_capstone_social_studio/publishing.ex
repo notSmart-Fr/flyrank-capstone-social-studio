@@ -249,4 +249,14 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   def dispatch_slot(slot, opts \\ []) do
     FlyrankCapstoneSocialStudio.Publishing.Dispatcher.dispatch_slot(slot, opts)
   end
+  @doc """
+  Lists all publish attempts with their associated slot and variant preloaded for audit logs.
+  """
+  def list_history do
+    from(pa in PublishAttempt,
+      order_by: [desc: pa.inserted_at],
+      preload: [slot: :variant]
+    )
+    |> Repo.all()
+  end
 end
