@@ -75,7 +75,8 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:oban, "~> 2.18"},
-      {:open_api_spex, "~> 3.22"}
+      {:open_api_spex, "~> 3.22"},
+      {:floki, "~> 0.38.4"}
     ]
   end
 
