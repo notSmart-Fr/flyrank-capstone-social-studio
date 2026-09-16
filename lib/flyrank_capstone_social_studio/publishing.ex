@@ -1,205 +1,27 @@
 defmodule FlyrankCapstoneSocialStudio.Publishing do
   @moduledoc """
-  The Publishing context.
+  The Publishing domain context. Manages publication time slots, execution scheduling,
+  idempotent adapter dispatching, and attempt audit history log retrieval.
   """
 
   import Ecto.Query, warn: false
+  alias FlyrankCapstoneSocialStudio.Repo
+
   alias FlyrankCapstoneSocialStudio.Content.Variant
   alias FlyrankCapstoneSocialStudio.Publishing.PublishAttempt
   alias FlyrankCapstoneSocialStudio.Publishing.Slot
-  alias FlyrankCapstoneSocialStudio.Repo
+  alias FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker
+  alias FlyrankCapstoneSocialStudio.Publishing.Adapters
+
+  # ===========================================================================
+  # Scheduling & Oban Integration
+  # ===========================================================================
 
   @doc """
-  Returns the list of publish_attempts.
+  Schedules an approved variant into a publication slot and enqueues an Oban job.
 
-  ## Examples
-
-      iex> list_publish_attempts()
-      [%PublishAttempt{}, ...]
-
-  """
-  def list_publish_attempts do
-    Repo.all(PublishAttempt)
-  end
-
-  @doc """
-  Gets a single publish_attempt.
-
-  Raises `Ecto.NoResultsError` if the Publish attempt does not exist.
-
-  ## Examples
-
-      iex> get_publish_attempt!(123)
-      %PublishAttempt{}
-
-      iex> get_publish_attempt!(456)
-      ** (Ecto.NoResultsError)
-
-  """
-  def get_publish_attempt!(id), do: Repo.get!(PublishAttempt, id)
-
-  @doc """
-  Creates a publish_attempt.
-
-  ## Examples
-
-      iex> create_publish_attempt(%{field: value})
-      {:ok, %PublishAttempt{}}
-
-      iex> create_publish_attempt(%{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def create_publish_attempt(attrs) do
-    %PublishAttempt{}
-    |> PublishAttempt.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc """
-  Updates a publish_attempt.
-
-  ## Examples
-
-      iex> update_publish_attempt(publish_attempt, %{field: new_value})
-      {:ok, %PublishAttempt{}}
-
-      iex> update_publish_attempt(publish_attempt, %{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def update_publish_attempt(%PublishAttempt{} = publish_attempt, attrs) do
-    publish_attempt
-    |> PublishAttempt.changeset(attrs)
-    |> Repo.update()
-  end
-
-  @doc """
-  Deletes a publish_attempt.
-
-  ## Examples
-
-      iex> delete_publish_attempt(publish_attempt)
-      {:ok, %PublishAttempt{}}
-
-      iex> delete_publish_attempt(publish_attempt)
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def delete_publish_attempt(%PublishAttempt{} = publish_attempt) do
-    Repo.delete(publish_attempt)
-  end
-
-  @doc """
-  Returns an `%Ecto.Changeset{}` for tracking publish_attempt changes.
-
-  ## Examples
-
-      iex> change_publish_attempt(publish_attempt)
-      %Ecto.Changeset{data: %PublishAttempt{}}
-
-  """
-  def change_publish_attempt(%PublishAttempt{} = publish_attempt, attrs \\ %{}) do
-    PublishAttempt.changeset(publish_attempt, attrs)
-  end
-
-  @doc """
-  Returns the list of slots.
-
-  ## Examples
-
-      iex> list_slots()
-      [%Slot{}, ...]
-
-  """
-  def list_slots do
-    Repo.all(Slot)
-  end
-
-  @doc """
-  Gets a single slot.
-
-  Raises `Ecto.NoResultsError` if the Slot does not exist.
-
-  ## Examples
-
-      iex> get_slot!(123)
-      %Slot{}
-
-      iex> get_slot!(456)
-      ** (Ecto.NoResultsError)
-
-  """
-  def get_slot!(id), do: Repo.get!(Slot, id)
-
-  @doc """
-  Creates a slot.
-
-  ## Examples
-
-      iex> create_slot(%{field: value})
-      {:ok, %Slot{}}
-
-      iex> create_slot(%{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def create_slot(attrs) do
-    %Slot{}
-    |> Slot.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  @doc """
-  Updates a slot.
-
-  ## Examples
-
-      iex> update_slot(slot, %{field: new_value})
-      {:ok, %Slot{}}
-
-      iex> update_slot(slot, %{field: bad_value})
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def update_slot(%Slot{} = slot, attrs) do
-    slot
-    |> Slot.changeset(attrs)
-    |> Repo.update()
-  end
-
-  @doc """
-  Deletes a slot.
-
-  ## Examples
-
-      iex> delete_slot(slot)
-      {:ok, %Slot{}}
-
-      iex> delete_slot(slot)
-      {:error, %Ecto.Changeset{}}
-
-  """
-  def delete_slot(%Slot{} = slot) do
-    Repo.delete(slot)
-  end
-
-  @doc """
-  Returns an `%Ecto.Changeset{}` for tracking slot changes.
-
-  ## Examples
-
-      iex> change_slot(slot)
-      %Ecto.Changeset{data: %Slot{}}
-
-  """
-  def change_slot(%Slot{} = slot, attrs \\ %{}) do
-    Slot.changeset(slot, attrs)
-  end
-
- @doc """
-  Schedules a variant. Refuses with an error tuple if the variant is not approved.
-  Enqueues a durable Oban job for execution.
+  Returns `{:error, :unapproved_variant}` if the variant status is not `"approved"`.
+  If a failed slot exists for this variant, it resets the slot to `"pending"` and re-enqueues it.
   """
   def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
     string_attrs =
@@ -208,10 +30,11 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
       |> Map.put("variant_id", variant.id)
 
     Repo.transaction(fn ->
+      # Lock the variant row to prevent concurrent scheduling races
       from(v in Variant, where: v.id == ^variant.id, lock: "FOR UPDATE")
       |> Repo.one!()
 
-      case Repo.one(from(s in Slot, where: s.variant_id == ^variant.id, order_by: [desc: s.inserted_at], limit: 1)) do
+      case get_latest_variant_slot(variant.id) do
         %Slot{status: "failed"} = failed_slot ->
           {:ok, retry_slot} = update_slot(failed_slot, %{status: "pending", scheduled_at: DateTime.utc_now()})
           enqueue_publish_job(retry_slot)
@@ -221,10 +44,9 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
           existing_slot
 
         nil ->
-          case %Slot{} |> Slot.changeset(string_attrs) |> Repo.insert() do
+          case create_slot(string_attrs) do
             {:ok, slot} ->
               enqueue_publish_job(slot)
-
               slot
 
             {:error, changeset} ->
@@ -234,39 +56,35 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
     end)
   end
 
-  def schedule_variant(%Variant{} = _variant, _attrs) do
+  def schedule_variant(%Variant{}, _attrs) do
     {:error, :unapproved_variant}
   end
 
-  defp enqueue_publish_job(slot) do
-    scheduled_at = slot.scheduled_at || DateTime.utc_now()
-
-    %{slot_id: slot.id}
-    |> FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker.new(scheduled_at: scheduled_at)
-    |> Oban.insert!()
-  end
-
-  @doc """
-  Returns the adapter module associated with a platform string.
-  """
-  def adapter_for_platform("telegram"),
-    do: FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram
-
-  def adapter_for_platform("mock_x"), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
-
-  def adapter_for_platform("mock_linkedin"),
-    do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn
-
-  def adapter_for_platform(_), do: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
+  # ===========================================================================
+  # Dispatching & Adapter Lookup
+  # ===========================================================================
 
   @doc """
   Dispatches publication of a scheduled slot with idempotency guarantees.
   """
-  def dispatch_slot(slot, opts \\ []) do
+  def dispatch_slot(%Slot{} = slot, opts \\ []) do
     FlyrankCapstoneSocialStudio.Publishing.Dispatcher.dispatch_slot(slot, opts)
   end
+
   @doc """
-  Lists all publish attempts with their associated slot and variant preloaded for audit logs.
+  Returns the adapter implementation module associated with a target platform string.
+  """
+  def adapter_for_platform("telegram"), do: Adapters.Telegram
+  def adapter_for_platform("mock_x"), do: Adapters.MockX
+  def adapter_for_platform("mock_linkedin"), do: Adapters.MockLinkedIn
+  def adapter_for_platform(_), do: Adapters.MockX
+
+  # ===========================================================================
+  # Audit History Queries
+  # ===========================================================================
+
+  @doc """
+  Lists all publish attempts with preloaded slots and variants for history audit logs.
   """
   def list_history do
     from(pa in PublishAttempt,
@@ -274,5 +92,107 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
       preload: [slot: :variant]
     )
     |> Repo.all()
+  end
+
+  # ===========================================================================
+  # Slot CRUD Operations
+  # ===========================================================================
+
+  @doc """
+  Returns the list of all scheduled slots.
+  """
+  def list_slots, do: Repo.all(Slot)
+
+  @doc """
+  Gets a single slot by ID. Raises `Ecto.NoResultsError` if not found.
+  """
+  def get_slot!(id), do: Repo.get!(Slot, id)
+
+  @doc """
+  Creates a new slot.
+  """
+  def create_slot(attrs) do
+    %Slot{}
+    |> Slot.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates an existing slot.
+  """
+  def update_slot(%Slot{} = slot, attrs) do
+    slot
+    |> Slot.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a slot.
+  """
+  def delete_slot(%Slot{} = slot), do: Repo.delete(slot)
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking slot changes.
+  """
+  def change_slot(%Slot{} = slot, attrs \\ %{}), do: Slot.changeset(slot, attrs)
+
+  # ===========================================================================
+  # PublishAttempt CRUD Operations
+  # ===========================================================================
+
+  @doc """
+  Returns the list of all publish attempts.
+  """
+  def list_publish_attempts, do: Repo.all(PublishAttempt)
+
+  @doc """
+  Gets a single publish attempt by ID. Raises `Ecto.NoResultsError` if not found.
+  """
+  def get_publish_attempt!(id), do: Repo.get!(PublishAttempt, id)
+
+  @doc """
+  Creates a new publish attempt.
+  """
+  def create_publish_attempt(attrs) do
+    %PublishAttempt{}
+    |> PublishAttempt.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Updates an existing publish attempt.
+  """
+  def update_publish_attempt(%PublishAttempt{} = publish_attempt, attrs) do
+    publish_attempt
+    |> PublishAttempt.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Deletes a publish attempt.
+  """
+  def delete_publish_attempt(%PublishAttempt{} = publish_attempt), do: Repo.delete(publish_attempt)
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for tracking publish attempt changes.
+  """
+  def change_publish_attempt(%PublishAttempt{} = publish_attempt, attrs \\ %{}),
+    do: PublishAttempt.changeset(publish_attempt, attrs)
+
+  # ===========================================================================
+  # Private Helpers
+  # ===========================================================================
+
+  defp get_latest_variant_slot(variant_id) do
+    from(s in Slot, where: s.variant_id == ^variant_id, order_by: [desc: s.inserted_at], limit: 1)
+    |> Repo.one()
+  end
+
+  defp enqueue_publish_job(%Slot{} = slot) do
+    scheduled_at = slot.scheduled_at || DateTime.utc_now()
+
+    %{slot_id: slot.id}
+    |> PublishWorker.new(scheduled_at: scheduled_at)
+    |> Oban.insert!()
   end
 end

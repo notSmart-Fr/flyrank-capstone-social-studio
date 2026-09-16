@@ -5,12 +5,13 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   """
 
   import Ecto.Query, warn: false
+  alias FlyrankCapstoneSocialStudio.Content.AiGenerator
+  alias FlyrankCapstoneSocialStudio.Content.ConstraintProfile
+  alias FlyrankCapstoneSocialStudio.Content.Post
+  alias FlyrankCapstoneSocialStudio.Content.UrlFetcher
+  alias FlyrankCapstoneSocialStudio.Content.Variant
   alias FlyrankCapstoneSocialStudio.Repo
 
-  alias FlyrankCapstoneSocialStudio.Content.Post
-  alias FlyrankCapstoneSocialStudio.Content.Variant
-  alias FlyrankCapstoneSocialStudio.Content.ConstraintProfile
-  alias FlyrankCapstoneSocialStudio.Content.UrlFetcher
 
   # ===========================================================================
   # Post CRUD Operations
@@ -110,46 +111,61 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   over HTTP *before* opening the DB transaction to prevent pool starvation.
   """
   def ingest_and_generate(post_attrs, platforms \\ ["telegram", "mock_x", "mock_linkedin"]) do
-    with {:ok, resolved_attrs} <- resolve_post_attrs(post_attrs) do
-      Repo.transaction(fn ->
-        case create_post(resolved_attrs) do
-          {:ok, post} ->
-            variants =
-              Enum.map(platforms, fn platform ->
-                case generate_variant_for_platform(post, platform) do
-                  {:ok, variant} -> variant
-                  {:error, reason_or_changeset} -> Repo.rollback(reason_or_changeset)
-                end
-              end)
+  with {:ok, resolved_attrs} <- resolve_post_attrs(post_attrs) do
+    Repo.transaction(fn ->
+      case create_post(resolved_attrs) do
+        {:ok, post} ->
+          variants =
+            platforms
+            |> Enum.map(fn platform ->
+              case generate_variant_for_platform(post, platform) do
+                {:ok, ab_variants} -> ab_variants
+                {:error, reason_or_changeset} -> Repo.rollback(reason_or_changeset)
+              end
+            end)
+            |> List.flatten()
 
-            {post, variants}
+          {post, variants}
 
-          {:error, changeset} ->
-            Repo.rollback(changeset)
-        end
-      end)
-    end
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
   end
-
+end
   @doc """
-  Generates a variant content draft tailored to a platform's constraint profile.
-  """
-  def generate_variant_for_platform(%Post{} = post, platform) do
-    case ConstraintProfile.get(platform) do
-      nil ->
-        {:error, :unsupported_platform}
+Generates both Variant A and Variant B drafts for a given platform.
+"""
+def generate_variant_for_platform(%Post{} = post, platform) do
+  case ConstraintProfile.get(platform) do
+    nil ->
+      {:error, :unsupported_platform}
 
-      profile ->
-        generated_text = draft_text_for_platform(post.content, profile)
+    profile ->
+      case AiGenerator.generate_ab_variants(post.content, platform, profile) do
+        {:ok, %{variant_a: text_a, variant_b: text_b}} ->
+          with {:ok, var_a} <- create_variant(%{
+                 post_id: post.id,
+                 platform: platform,
+                 content: text_a,
+                 variant_label: "A",
+                 status: "draft"
+               }),
+               {:ok, var_b} <- create_variant(%{
+                 post_id: post.id,
+                 platform: platform,
+                 content: text_b,
+                 variant_label: "B",
+                 status: "draft"
+               }) do
+            {:ok, [var_a, var_b]}
+          end
 
-        create_variant(%{
-          post_id: post.id,
-          platform: platform,
-          content: generated_text,
-          status: "draft"
-        })
-    end
+        {:error, reason} ->
+          {:error, reason}
+      end
   end
+end
 
   # ===========================================================================
   # State Machine & Review Workflows
@@ -206,18 +222,4 @@ defmodule FlyrankCapstoneSocialStudio.Content do
 
   defp resolve_post_attrs(attrs), do: {:ok, attrs}
 
-  # Deterministic heuristic generator based on platform length and hashtag limits
-  defp draft_text_for_platform(content, profile) do
-    max_text_len = max(profile.max_length - 20, 1)
-    trimmed_content = String.slice(content, 0, max_text_len)
-
-    hashtags =
-      case profile.max_hashtags do
-        1 -> " #tech"
-        2 -> " #tech #news"
-        _ -> " #tech #news #update"
-      end
-
-    trimmed_content <> hashtags
-  end
 end

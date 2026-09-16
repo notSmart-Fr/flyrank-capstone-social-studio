@@ -65,6 +65,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
       changeset
       |> validate_length(char_count, profile.max_length, platform)
       |> validate_hashtags(hashtag_count, profile.max_hashtags, platform)
+      |> validate_tone(content, profile, platform)
     else
       changeset
     end
@@ -89,4 +90,19 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
   end
 
   defp validate_hashtags(changeset, _actual, _max, _platform), do: changeset
+
+  # Tone validation rules helper
+  defp validate_tone(changeset, content, _profile, platform) do
+    banned_tone_words = ["OMG", "SLAY", "LMAO"]
+
+    if Enum.any?(banned_tone_words, &String.contains?(content, &1)) do
+      add_error(
+        changeset,
+        :content,
+        "violates tone rules for #{platform}"
+      )
+    else
+      changeset
+    end
+  end
 end

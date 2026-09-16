@@ -48,6 +48,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
     get "/campaigns/:id", CampaignController, :show
     get "/publishing/history", CampaignController, :history
     get "/health", HealthController, :check
+    post "/variants/:id/schedule", VariantController, :schedule
+    patch "/variants/:id", VariantController, :update
+    post "/variants/:id/approve", VariantController, :approve
+    post "/variants/:id/reject", VariantController, :reject
   end
 
   # ===================================================================

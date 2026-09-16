@@ -40,3 +40,6 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+#oban test configuration
+config :flyrank_capstone_social_studio, Oban,
+  testing: :manual
