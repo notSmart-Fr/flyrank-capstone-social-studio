@@ -158,3 +158,31 @@ Result: 3 passed
 - The Oban publishing worker is enqueued and executes the scheduled slot, transitioning it to `published`.
 - A successful publishing attempt is recorded in the audit log with the slot ID, success status, and external post ID.
 - Retries or restarts do not create duplicate published outputs because idempotent execution guardrails remain in place.
+
+---
+
+## Phase 5: Publish History Audit Logs
+
+### 1. Requirements & System Proofs
+
+#### Requirement: Comprehensive Publish Audit Log
+- **Status:** PASS
+- **System Proof:** Every publish attempt—whether successful or failed—is automatically recorded in the `publish_attempts` table. The `Publishing.list_history/0` query retrieves all execution history ordered by timestamp and preloads associated `slot` and `variant` records for UI audit trail rendering.
+
+### 2. Execution & Test Transcript
+
+#### Test Command:
+```powershell
+mix test test/flyrank_capstone_social_studio/publishing_test.exs
+```
+
+#### Command Transcript & Output:
+```text
+PS I:\projects\flyrank-capstone-social-studio> mix test test/flyrank_capstone_social_studio/publishing_test.exs
+Running ExUnit with seed: 99729, max_cases: 32
+
+..
+Finished in 0.1 seconds (0.00s async, 0.1s sync)
+
+Result: 2 passed
+```

@@ -5,7 +5,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.VariantController do
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
 
-  tags ["Campaign Posts"]
+  tags ["Variants"]
 
   operation :update,
     summary: "Edit variant content",

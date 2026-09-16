@@ -36,22 +36,27 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
   # ===================================================================
   # Application API Endpoints
   # ===================================================================
+  # ===================================================================
+  # Application API Endpoints
+  # ===================================================================
   scope "/api", FlyrankCapstoneSocialStudioWeb do
     pipe_through :api
 
     post "/blog-posts", PostController, :create
-    patch "/campaign-posts/:id", VariantController, :update
-    post "/campaign-posts/:id/approve", VariantController, :approve
-    post "/campaign-posts/:id/reject", VariantController, :reject
-    post "/campaign-posts/:id/schedule", VariantController, :schedule
-    post "/slots/:id/publish", SlotController, :publish
-    get "/campaigns/:id", CampaignController, :show
-    get "/publishing/history", CampaignController, :history
-    get "/health", HealthController, :check
-    post "/variants/:id/schedule", VariantController, :schedule
+
+    # Variant & Campaign Post Management
     patch "/variants/:id", VariantController, :update
     post "/variants/:id/approve", VariantController, :approve
     post "/variants/:id/reject", VariantController, :reject
+    post "/variants/:id/schedule", VariantController, :schedule
+
+    # Publishing & History
+    post "/slots/:id/publish", SlotController, :publish
+    get "/campaigns/:id", CampaignController, :show
+    get "/publishing/history", CampaignController, :history
+
+    # System Health
+    get "/health", HealthController, :check
   end
 
   # ===================================================================
