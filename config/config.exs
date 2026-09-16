@@ -73,6 +73,11 @@ config :logger, :default_formatter,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+# Configure publishing adapters for the platform.
+config :flyrank_capstone_social_studio, :adapters,
+  telegram: FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram,
+  mock_x: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX,
+  mock_linkedin: FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

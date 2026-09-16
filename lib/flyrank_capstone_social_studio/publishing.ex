@@ -11,7 +11,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   alias FlyrankCapstoneSocialStudio.Publishing.PublishAttempt
   alias FlyrankCapstoneSocialStudio.Publishing.Slot
   alias FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker
-  alias FlyrankCapstoneSocialStudio.Publishing.Adapters
 
   # ===========================================================================
   # Scheduling & Oban Integration
@@ -72,12 +71,18 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   end
 
   @doc """
-  Returns the adapter implementation module associated with a target platform string.
+  Returns the configured adapter module for a given platform string.
+  Lookup is driven by Application configuration to allow runtime adapter swaps without code changes.
   """
-  def adapter_for_platform("telegram"), do: Adapters.Telegram
-  def adapter_for_platform("mock_x"), do: Adapters.MockX
-  def adapter_for_platform("mock_linkedin"), do: Adapters.MockLinkedIn
-  def adapter_for_platform(_), do: Adapters.MockX
+  def adapter_for_platform(platform) when is_binary(platform) do
+    adapters = Application.get_env(:flyrank_capstone_social_studio, :adapters, [])
+
+    Keyword.get(
+      adapters,
+      String.to_atom(platform),
+      FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
+    )
+  end
 
   # ===========================================================================
   # Audit History Queries
