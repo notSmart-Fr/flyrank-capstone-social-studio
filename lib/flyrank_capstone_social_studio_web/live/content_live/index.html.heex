@@ -1,0 +1,144 @@
+<div class="space-y-8">
+  
+  <!-- ================================================================= -->
+  <!-- SECTION 1: PAGE HEADER & STATS COUNTER                           -->
+  <!-- ================================================================= -->
+  <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
+    <div>
+      <.h2 class="text-gray-900 dark:text-white font-bold">Content Ingestion Studio</.h2>
+      <.p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        Ingest Markdown or URLs to generate grounded, platform-tailored social posts.
+      </.p>
+    </div>
+    
+    <!-- Real-time counter badge -->
+    <div class="flex items-center gap-2">
+      <.badge color="info" variant="outline">
+        {length(@posts)} Ingested Posts
+      </.badge>
+    </div>
+  </header>
+
+  <!-- ================================================================= -->
+  <!-- SECTION 2: CONTENT INGESTION FORM CARD                            -->
+  <!-- ================================================================= -->
+  <section aria-labelledby="ingest-card-title">
+    <.card class="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800">
+      <.card_content heading="Ingest New Content" class="p-6">
+        
+        <!-- LiveView Form: phx-submit sends "save_post" event to index.ex over WebSockets -->
+        <!-- phx-change sends "validate" event on input blur/change -->
+        <.form 
+          :let={f} 
+          for={@changeset} 
+          id="ingest-form" 
+          phx-change="validate" 
+          phx-submit="save_post" 
+          class="space-y-6"
+        >
+          
+          <!-- Field 1: Post Title -->
+          <div>
+            <.label for={f[:title].id}>Post Title</.label>
+            <.text_input field={f[:title]} placeholder="e.g. Scaling Elixir Services on Render" />
+            <.form_field_error field={f[:title]} />
+          </div>
+
+          <!-- Field 2 & 3: Source Type & Target Platform Checkboxes -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <.label for={f[:source_type].id}>Source Type</.label>
+              <.select 
+                field={f[:source_type]} 
+                options={[{"Markdown Text", "markdown"}, {"Web URL", "url"}]} 
+              />
+            </div>
+
+            <div>
+              <.label>Target Platforms</.label>
+              <div class="flex gap-4 items-center pt-2">
+                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input type="checkbox" name="platforms[]" value="telegram" checked class="rounded text-primary-600 focus:ring-primary-500" />
+                  Telegram
+                </label>
+                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                  <input type="checkbox" name="platforms[]" value="x" checked class="rounded text-primary-600 focus:ring-primary-500" />
+                  X / Twitter
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Field 4: Content Textarea -->
+          <div>
+            <.label for={f[:content].id}>Source Content or URL</.label>
+            <.textarea 
+              field={f[:content]} 
+              rows={5} 
+              placeholder="Paste raw Markdown text or website URL here..." 
+            />
+            <.form_field_error field={f[:content]} />
+          </div>
+
+          <!-- Submit Button with Dynamic Spinner State -->
+          <div class="flex justify-end pt-2">
+            <.button color="primary" variant="solid" type="submit" loading={@loading}>
+              <.icon name="hero-sparkles-micro" class="w-4 h-4 mr-2" />
+              Ingest & Generate Variants
+            </.button>
+          </div>
+
+        </.form>
+      </.card_content>
+    </.card>
+  </section>
+
+  <!-- ================================================================= -->
+  <!-- SECTION 3: RECENT INGESTIONS GRID / EMPTY STATE                   -->
+  <!-- ================================================================= -->
+  <section aria-labelledby="recent-ingestions-title" class="space-y-4">
+    <.h3 id="recent-ingestions-title" class="text-gray-900 dark:text-white font-semibold">
+      Recent Ingestions
+    </.h3>
+
+    <%= if Enum.empty?(@posts) do %>
+      <!-- Empty State View -->
+      <.card class="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 border border-dashed border-gray-300 dark:border-gray-800">
+        <.icon name="hero-document-text-micro" class="w-10 h-10 mx-auto mb-2 text-gray-400" />
+        <p class="font-medium">No posts ingested yet.</p>
+        <p class="text-xs mt-1">Submit content using the form above to start generating social media variants.</p>
+      </.card>
+    <% else %>
+      <!-- Ingested Posts Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <%= for post <- @posts do %>
+          <article>
+            <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 h-full flex flex-col justify-between">
+              <.card_content class="p-5">
+                <!-- Post Title & Type Badge -->
+                <div class="flex items-start justify-between gap-2 mb-2">
+                  <.h4 class="text-base font-semibold text-gray-900 dark:text-white line-clamp-1">{post.title}</.h4>
+                  <.badge color="info" variant="outline" label={post.source_type} />
+                </div>
+                
+                <!-- Post Preview Copy -->
+                <p class="text-xs text-gray-600 dark:text-gray-400 line-clamp-3 mb-4">
+                  {post.content}
+                </p>
+
+                <!-- Post Metadata Footer -->
+                <footer class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400">
+                  <span>Hash: {String.slice(post.content_hash || "n/a", 0, 8)}</span>
+                  <.link navigate={~p"/posts/#{post.id}"} class="text-primary-600 dark:text-primary-400 font-medium hover:underline flex items-center">
+                    Inspect Variants →
+                  </.link>
+                </footer>
+              </.card_content>
+            </.card>
+          </article>
+        <% end %>
+      </div>
+    <% end %>
+  </section>
+
+</div>
