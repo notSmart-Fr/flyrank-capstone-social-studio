@@ -60,6 +60,8 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
   get "/", PageController, :home
   # Add live route for Post & Variant Inspector
   live "/posts/:id", PostLive.Show, :show
+  # Add live route for System & Cost Analytics
+  live "/analytics", AnalyticsLive.Index, :index
 end
 
   if Application.compile_env(:flyrank_capstone_social_studio, :dev_routes) do
