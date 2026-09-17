@@ -111,7 +111,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   If `source_type` is set to `"url"`, the web page content is fetched and extracted
   over HTTP *before* opening the DB transaction to prevent pool starvation.
   """
-  def ingest_and_generate(post_attrs, platforms \\ ["telegram", "mock_x", "mock_linkedin"]) do
+ def ingest_and_generate(post_attrs, platforms \\ ["telegram", "mock_x", "mock_linkedin"]) do
   with {:ok, resolved_attrs} <- resolve_post_attrs(post_attrs) do
     Repo.transaction(fn ->
       case create_post(resolved_attrs) do
@@ -126,16 +126,21 @@ defmodule FlyrankCapstoneSocialStudio.Content do
             end)
             |> List.flatten()
 
-          # Sum generation costs across all variants
+          # 1. Sum generation costs safely across all created variants
           total_cost =
             Enum.reduce(variants, Decimal.new("0.0"), fn v, acc ->
-              Decimal.add(acc, v.generation_cost || Decimal.new("0.0"))
+              cost = v.generation_cost || Decimal.new("0.0")
+              Decimal.add(acc, cost)
             end)
 
-          # Update parent Post with the total campaign cost
-          {:ok, updated_post} = update_post(post, %{total_ai_cost: total_cost})
+          # 2. Update post and capture updated_post struct
+          case update_post(post, %{total_ai_cost: total_cost}) do
+            {:ok, updated_post} ->
+              {updated_post, variants}
 
-          {updated_post, variants}
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
 
         {:error, changeset} ->
           Repo.rollback(changeset)

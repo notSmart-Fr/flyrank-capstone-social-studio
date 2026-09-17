@@ -30,15 +30,20 @@ def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
 
   idempotency_key = Map.get(string_attrs, "idempotency_key")
 
-  # Check if a slot with this idempotency_key already exists
-  if idempotency_key && Repo.get_by(Slot, idempotency_key: idempotency_key) do
-    # 1. Return an invalid changeset with an error on :idempotency_key
-    %Slot{}
-    |> Slot.changeset(string_attrs)
-    |> Ecto.Changeset.add_error(:idempotency_key, "has already been taken")
-    |> then(&{:error, &1})
+  # 1. If an explicit idempotency_key is provided, try creating the slot directly.
+  # This lets Ecto's unique_constraint(:idempotency_key) catch duplicates and
+  # return {:error, changeset} directly without entering the transaction.
+  if idempotency_key do
+    case create_slot(string_attrs) do
+      {:ok, slot} ->
+        enqueue_publish_job(slot)
+        {:ok, slot}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
   else
-    # 2. Proceed with normal scheduling transaction
+    # 2. If no idempotency key was passed, handle normal transactional scheduling
     Repo.transaction(fn ->
       from(v in Variant, where: v.id == ^variant.id, lock: "FOR UPDATE")
       |> Repo.one!()

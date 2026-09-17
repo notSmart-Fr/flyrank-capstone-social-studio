@@ -9,8 +9,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.Post do
     field :url, :string
     field :external_source_id, :string
     # Total aggregated campaign cost
-    field :total_ai_cost, :decimal
-
+    field :total_ai_cost, :decimal, default: Decimal.new("0.0")
     has_many :variants, FlyrankCapstoneSocialStudio.Content.Variant
 
     timestamps()
