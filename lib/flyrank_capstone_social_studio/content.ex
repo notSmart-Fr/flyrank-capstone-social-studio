@@ -113,39 +113,64 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   """
  def ingest_and_generate(post_attrs, platforms \\ ["telegram", "mock_x", "mock_linkedin"]) do
   with {:ok, resolved_attrs} <- resolve_post_attrs(post_attrs) do
-    Repo.transaction(fn ->
-      case create_post(resolved_attrs) do
-        {:ok, post} ->
-          variants =
-            platforms
-            |> Enum.map(fn platform ->
-              case generate_variant_for_platform(post, platform) do
-                {:ok, ab_variants} -> ab_variants
-                {:error, reason_or_changeset} -> Repo.rollback(reason_or_changeset)
-              end
-            end)
-            |> List.flatten()
+    # 1. Compute deterministic hash from resolved parameters
+    title = resolved_attrs["title"] || ""
+    content = resolved_attrs["content"] || ""
+    hash = :crypto.hash(:sha256, "#{title}:#{content}") |> Base.encode16()
 
-          # 1. Sum generation costs safely across all created variants
-          total_cost =
-            Enum.reduce(variants, Decimal.new("0.0"), fn v, acc ->
-              cost = v.generation_cost || Decimal.new("0.0")
-              Decimal.add(acc, cost)
-            end)
+    # 2. Check for duplicate within 5 minutes window
+    cutoff = DateTime.utc_now() |> DateTime.add(-300, :second)
 
-          # 2. Update post and capture updated_post struct
-          case update_post(post, %{total_ai_cost: total_cost}) do
-            {:ok, updated_post} ->
-              {updated_post, variants}
+    existing_post =
+      from(p in Post,
+        where: p.content_hash == ^hash and p.inserted_at >= ^cutoff,
+        limit: 1
+      )
+      |> Repo.one()
 
-            {:error, changeset} ->
-              Repo.rollback(changeset)
-          end
+    if existing_post do
+      # Short-circuit: Return existing post and variants without regenerating
+      variants = Repo.all(from v in Variant, where: v.post_id == ^existing_post.id)
+      {:ok, {existing_post, variants}}
+    else
+      # 3. New submission: Proceed with transaction
+      Repo.transaction(fn ->
+        # Pass content_hash into creation attributes
+        attrs_with_hash = Map.put(resolved_attrs, "content_hash", hash)
 
-        {:error, changeset} ->
-          Repo.rollback(changeset)
-      end
-    end)
+        case create_post(attrs_with_hash) do
+          {:ok, post} ->
+            variants =
+              platforms
+              |> Enum.map(fn platform ->
+                case generate_variant_for_platform(post, platform) do
+                  {:ok, ab_variants} -> ab_variants
+                  {:error, reason_or_changeset} -> Repo.rollback(reason_or_changeset)
+                end
+              end)
+              |> List.flatten()
+
+            # Sum generation costs
+            total_cost =
+              Enum.reduce(variants, Decimal.new("0.0"), fn v, acc ->
+                cost = v.generation_cost || Decimal.new("0.0")
+                Decimal.add(acc, cost)
+              end)
+
+            # Update parent Post with aggregated AI costs
+            case update_post(post, %{total_ai_cost: total_cost}) do
+              {:ok, updated_post} ->
+                {updated_post, variants}
+
+              {:error, changeset} ->
+                Repo.rollback(changeset)
+            end
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+    end
   end
 end
   @doc """

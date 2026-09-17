@@ -22,17 +22,22 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   Returns `{:error, :unapproved_variant}` if the variant status is not `"approved"`.
   If a failed slot exists for this variant, it resets the slot to `"pending"` and re-enqueues it.
   """
-def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
+# 1. Function Header defining default argument (no body)
+def schedule_variant(variant, attrs, opts \\ [])
+
+# 2. Approved Variant Clause
+def schedule_variant(%Variant{status: "approved"} = variant, attrs, opts) do
+  mode = Keyword.get(opts, :mode, :manual)
+  scheduled_at = resolve_scheduled_at(mode, variant.platform, attrs)
+
   string_attrs =
     attrs
     |> Map.new(fn {k, v} -> {to_string(k), v} end)
     |> Map.put("variant_id", variant.id)
+    |> Map.put("scheduled_at", scheduled_at)
 
   idempotency_key = Map.get(string_attrs, "idempotency_key")
 
-  # 1. If an explicit idempotency_key is provided, try creating the slot directly.
-  # This lets Ecto's unique_constraint(:idempotency_key) catch duplicates and
-  # return {:error, changeset} directly without entering the transaction.
   if idempotency_key do
     case create_slot(string_attrs) do
       {:ok, slot} ->
@@ -43,14 +48,13 @@ def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
         {:error, changeset}
     end
   else
-    # 2. If no idempotency key was passed, handle normal transactional scheduling
     Repo.transaction(fn ->
       from(v in Variant, where: v.id == ^variant.id, lock: "FOR UPDATE")
       |> Repo.one!()
 
       case get_latest_variant_slot(variant.id) do
         %Slot{status: "failed"} = failed_slot ->
-          {:ok, retry_slot} = update_slot(failed_slot, %{status: "pending", scheduled_at: DateTime.utc_now()})
+          {:ok, retry_slot} = update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
           enqueue_publish_job(retry_slot)
           retry_slot
 
@@ -71,8 +75,40 @@ def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
   end
 end
 
-def schedule_variant(%Variant{}, _attrs) do
+# 3. Fallback Clause for unapproved variants
+def schedule_variant(%Variant{}, _attrs, _opts) do
   {:error, :unapproved_variant}
+end
+
+# Helper to calculate schedule target
+defp resolve_scheduled_at(:manual, _platform, attrs) do
+  Map.get(attrs, "scheduled_at") || Map.get(attrs, :scheduled_at) || DateTime.utc_now()
+end
+
+defp resolve_scheduled_at(:auto, platform, _attrs) do
+  # Find latest pending or published slot for this platform
+  latest_slot_time =
+    from(s in Slot,
+      join: v in assoc(s, :variant),
+      where: v.platform == ^platform and s.status in ["pending", "published"],
+      select: max(s.scheduled_at)
+    )
+    |> Repo.one()
+
+  now = DateTime.utc_now()
+
+  cond do
+    is_nil(latest_slot_time) ->
+      # First slot for platform: schedule 15 minutes from now
+      DateTime.add(now, 15 * 60, :second)
+
+    DateTime.compare(latest_slot_time, now) == :gt ->
+      # Push 2 hours past the highest existing slot time
+      DateTime.add(latest_slot_time, 2 * 3600, :second)
+
+    true ->
+      DateTime.add(now, 15 * 60, :second)
+  end
 end
 
   # ===========================================================================
