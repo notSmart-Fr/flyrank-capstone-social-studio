@@ -13,29 +13,17 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
-    plug OpenApiSpex.Plug.PutApiSpec, module: FlyrankCapstoneSocialStudioWeb.ApiSpec
-  end
-
-  pipeline :docs do
-    plug :accepts, ["html", "json"]
-    plug OpenApiSpex.Plug.PutApiSpec, module: FlyrankCapstoneSocialStudioWeb.ApiSpec
   end
 
   # ===================================================================
-  # Documentation Routes (Scalar UI & Dynamic Spec JSON)
+  # Documentation Routes (Scalar UI)
   # ===================================================================
   scope "/api" do
-    pipe_through :docs
+    pipe_through :browser
 
     get "/scalar", FlyrankCapstoneSocialStudioWeb.ScalarController, :index
-    # Pass module directly in the plug opts so RenderSpec doesn't rely on conn.private
-    get "/openapi.json", Elixir.OpenApiSpex.Plug.RenderSpec,
-      module: FlyrankCapstoneSocialStudioWeb.ApiSpec
   end
 
-  # ===================================================================
-  # Application API Endpoints
-  # ===================================================================
   # ===================================================================
   # Application API Endpoints
   # ===================================================================

@@ -10,9 +10,15 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
   alias FlyrankCapstoneSocialStudio.Content
 
   @doc """
-  Executes publishing for a slot. Idempotent: safe against retries and duplicate calls.
+  Short-circuits immediately if the slot is already published to enforce idempotency.
   """
-  def dispatch_slot(%Slot{} = slot, opts \\ []) do
+  def dispatch_slot(slot, opts \\ [])
+
+  def dispatch_slot(%Slot{status: "published"} = _slot, _opts) do
+    {:ok, %{status: :already_published}}
+  end
+
+  def dispatch_slot(%Slot{} = slot, opts) do
     # 1. Idempotency Check: Check for existing successful attempt
     existing_successful =
       from(pa in PublishAttempt,
@@ -21,7 +27,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
       |> Repo.one()
 
     if existing_successful do
-      {:ok, existing_successful}
+      {:ok, %{status: :already_published}}
     else
       execute_dispatch(slot, opts)
     end

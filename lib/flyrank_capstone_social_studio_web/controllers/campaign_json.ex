@@ -39,15 +39,16 @@ defmodule FlyrankCapstoneSocialStudioWeb.CampaignJSON do
   end
 
   defp attempt_data(attempt) do
+    raw_response = Map.get(attempt.response_payload || %{}, "raw_response")
     %{
       id: attempt.id,
       slot_id: attempt.slot_id,
       platform: get_in(attempt, [Access.key(:slot), Access.key(:variant), Access.key(:platform)]),
       status: attempt.status,
-      attempted_at: attempt.attempted_at,
+      attempted_at: attempt.inserted_at,
       external_post_id: attempt.external_post_id,
       error_message: attempt.error_message,
-      raw_response: attempt.raw_response
+      raw_response: raw_response
     }
   end
 end

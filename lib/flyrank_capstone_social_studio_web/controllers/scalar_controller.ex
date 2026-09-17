@@ -15,7 +15,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.ScalarController do
       <body>
         <script
           id="api-reference"
-          data-url="/api/openapi.json">
+          data-url="/openapi.yaml">
         </script>
         <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
       </body>

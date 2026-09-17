@@ -1,18 +1,9 @@
 defmodule FlyrankCapstoneSocialStudioWeb.SlotController do
   use FlyrankCapstoneSocialStudioWeb, :controller
-  use OpenApiSpex.ControllerSpecs
+
 
   alias FlyrankCapstoneSocialStudio.Publishing
 
-  tags ["Publishing"]
-
-  operation :publish,
-    summary: "Publish a scheduled slot",
-    parameters: [id: [in: :path, type: :integer, required: true, description: "Slot ID"]],
-    responses: [
-      ok: "Slot published or already published",
-      unprocessable_entity: "Slot cannot be published"
-    ]
 
   def publish(conn, %{"id" => id}) do
     slot = Publishing.get_slot!(id)

@@ -7,6 +7,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   import Ecto.Query, warn: false
   alias FlyrankCapstoneSocialStudio.Content.AiGenerator
   alias FlyrankCapstoneSocialStudio.Content.ConstraintProfile
+  alias FlyrankCapstoneSocialStudio.Content.GroundingVerifier
   alias FlyrankCapstoneSocialStudio.Content.Post
   alias FlyrankCapstoneSocialStudio.Content.UrlFetcher
   alias FlyrankCapstoneSocialStudio.Content.Variant
@@ -125,7 +126,16 @@ defmodule FlyrankCapstoneSocialStudio.Content do
             end)
             |> List.flatten()
 
-          {post, variants}
+          # Sum generation costs across all variants
+          total_cost =
+            Enum.reduce(variants, Decimal.new("0.0"), fn v, acc ->
+              Decimal.add(acc, v.generation_cost || Decimal.new("0.0"))
+            end)
+
+          # Update parent Post with the total campaign cost
+          {:ok, updated_post} = update_post(post, %{total_ai_cost: total_cost})
+
+          {updated_post, variants}
 
         {:error, changeset} ->
           Repo.rollback(changeset)
@@ -143,20 +153,46 @@ def generate_variant_for_platform(%Post{} = post, platform) do
 
     profile ->
       case AiGenerator.generate_ab_variants(post.content, platform, profile) do
-        {:ok, %{variant_a: text_a, variant_b: text_b}} ->
+        {:ok, result} ->
+          # 1. Run Grounding Verification on both generated variants
+          ground_a = GroundingVerifier.verify_grounding(post.content, result.variant_a)
+          ground_b = GroundingVerifier.verify_grounding(post.content, result.variant_b)
+
+          # 2. Determine status and rejection reasons based on grounding results
+          {status_a, reason_a} = determine_grounding_status(ground_a)
+          {status_b, reason_b} = determine_grounding_status(ground_b)
+
+          # Halve token counts/cost per variant for split attribution
+          half_cost = Decimal.div(result.cost, 2)
+          half_prompt = div(result.prompt_tokens, 2)
+          half_completion = div(result.completion_tokens, 2)
+
+          # 3. Create variants with dynamic status ("draft" or "rejected")
           with {:ok, var_a} <- create_variant(%{
                  post_id: post.id,
                  platform: platform,
-                 content: text_a,
+                 content: result.variant_a,
                  variant_label: "A",
-                 status: "draft"
+                 status: status_a,
+                 rejection_reason: reason_a,
+                 prompt_tokens: half_prompt,
+                 completion_tokens: half_completion,
+                 total_tokens: half_prompt + half_completion,
+                 generation_cost: half_cost,
+                 model_used: result.model
                }),
                {:ok, var_b} <- create_variant(%{
                  post_id: post.id,
                  platform: platform,
-                 content: text_b,
+                 content: result.variant_b,
                  variant_label: "B",
-                 status: "draft"
+                 status: status_b,
+                 rejection_reason: reason_b,
+                 prompt_tokens: half_prompt,
+                 completion_tokens: half_completion,
+                 total_tokens: half_prompt + half_completion,
+                 generation_cost: half_cost,
+                 model_used: result.model
                }) do
             {:ok, [var_a, var_b]}
           end
@@ -165,6 +201,12 @@ def generate_variant_for_platform(%Post{} = post, platform) do
           {:error, reason}
       end
   end
+end
+
+# Private helper to parse GroundingVerifier results
+defp determine_grounding_status({:ok, :grounded}), do: {"draft", nil}
+defp determine_grounding_status({:error, :hallucination_detected, claims}) do
+  {"rejected", "Grounding Audit Failed: Fake or unsupported claims detected -> #{Enum.join(claims, ", ")}"}
 end
 
   # ===========================================================================

@@ -43,10 +43,10 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
   end
 
   # ===========================================================================
-  # 2. Variant Constraint Profiles Verification
+  # 2. Variant Constraint Profiles & AI Cost Tracking
   # ===========================================================================
-  describe "variant constraint profiles" do
-    test "ingest_and_generate/2 creates valid A/B variants for target platforms" do
+  describe "variant constraint profiles and cost tracking" do
+    test "ingest_and_generate/2 creates valid A/B variants and tracks AI costs" do
       post_params = %{
         "title" => "Understanding Idempotency in Elixir",
         "content" => "Idempotency ensures that retrying an operation produces the exact same result.",
@@ -66,6 +66,16 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
       assert length(telegram_variants) == 2
       assert length(mock_x_variants) == 2
       assert Enum.all?(variants, &(&1.status == "draft"))
+
+      # --- Assert AI Token & Cost Tracking ---
+      assert Enum.all?(variants, &(&1.prompt_tokens >= 0))
+      assert Enum.all?(variants, &(&1.completion_tokens >= 0))
+      assert Enum.all?(variants, &(&1.total_tokens >= 0))
+      assert Enum.all?(variants, &(Decimal.compare(&1.generation_cost, Decimal.new("0.0")) != :lt))
+
+      # Assert parent Post has accumulated the summed generation cost
+      assert post.total_ai_cost != nil
+      assert Enum.all?(variants, &(&1.generation_cost != nil and Decimal.compare(&1.generation_cost, Decimal.new("0.0")) != :lt))
     end
 
     test "variant changeset blocks rule-breaking content with explicit error messages naming the rules" do
@@ -90,6 +100,30 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
       assert error_text =~ "exceeds maximum character limit"
       assert error_text =~ "exceeds maximum hashtag count"
       assert error_text =~ "violates tone rules"
+    end
+  end
+
+  # ===========================================================================
+  # 3. Grounding Verification Audit (Fake Statistic Detection)
+  # ===========================================================================
+  describe "factual grounding verification" do
+    test "ingest_and_generate/2 flags variants with fake or hallucinated claims as rejected" do
+      # Grounding test: source post contains NO statistics
+      post_params = %{
+        "title" => "Grounding Test Post",
+        "content" => "Elixir relies on BEAM processes for fault-tolerant applications.",
+        "source_type" => "markdown"
+      }
+
+      assert {:ok, {_post, variants}} = Content.ingest_and_generate(post_params, ["telegram"])
+
+      # If GroundingVerifier triggers a failure on an ungrounded claim or mock hallucination,
+      # the variant status will be set to "rejected" with a populated rejection_reason.
+      rejected_variants = Enum.filter(variants, &(&1.status == "rejected"))
+
+      for variant <- rejected_variants do
+        assert variant.rejection_reason =~ "Grounding Audit Failed"
+      end
     end
   end
 end

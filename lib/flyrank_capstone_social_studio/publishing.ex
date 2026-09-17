@@ -22,14 +22,24 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   Returns `{:error, :unapproved_variant}` if the variant status is not `"approved"`.
   If a failed slot exists for this variant, it resets the slot to `"pending"` and re-enqueues it.
   """
-  def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
-    string_attrs =
-      attrs
-      |> Map.new(fn {k, v} -> {to_string(k), v} end)
-      |> Map.put("variant_id", variant.id)
+def schedule_variant(%Variant{status: "approved"} = variant, attrs) do
+  string_attrs =
+    attrs
+    |> Map.new(fn {k, v} -> {to_string(k), v} end)
+    |> Map.put("variant_id", variant.id)
 
+  idempotency_key = Map.get(string_attrs, "idempotency_key")
+
+  # Check if a slot with this idempotency_key already exists
+  if idempotency_key && Repo.get_by(Slot, idempotency_key: idempotency_key) do
+    # 1. Return an invalid changeset with an error on :idempotency_key
+    %Slot{}
+    |> Slot.changeset(string_attrs)
+    |> Ecto.Changeset.add_error(:idempotency_key, "has already been taken")
+    |> then(&{:error, &1})
+  else
+    # 2. Proceed with normal scheduling transaction
     Repo.transaction(fn ->
-      # Lock the variant row to prevent concurrent scheduling races
       from(v in Variant, where: v.id == ^variant.id, lock: "FOR UPDATE")
       |> Repo.one!()
 
@@ -38,9 +48,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
           {:ok, retry_slot} = update_slot(failed_slot, %{status: "pending", scheduled_at: DateTime.utc_now()})
           enqueue_publish_job(retry_slot)
           retry_slot
-
-        %Slot{} = existing_slot ->
-          existing_slot
 
         nil ->
           case create_slot(string_attrs) do
@@ -51,13 +58,17 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
             {:error, changeset} ->
               Repo.rollback(changeset)
           end
+
+        %Slot{} = existing_slot ->
+          existing_slot
       end
     end)
   end
+end
 
-  def schedule_variant(%Variant{}, _attrs) do
-    {:error, :unapproved_variant}
-  end
+def schedule_variant(%Variant{}, _attrs) do
+  {:error, :unapproved_variant}
+end
 
   # ===========================================================================
   # Dispatching & Adapter Lookup

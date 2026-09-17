@@ -11,6 +11,13 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
     field :hashtags_count, :integer
     field :character_count, :integer
     field :rejection_reason, :string
+    # AI Cost & Token tracking fields
+    field :prompt_tokens, :integer
+    field :completion_tokens, :integer
+    field :total_tokens, :integer
+    field :generation_cost, :decimal, default: Decimal.new("0.0")
+    field :model_used, :string
+
 
     belongs_to :post, FlyrankCapstoneSocialStudio.Content.Post
     has_many :slots, FlyrankCapstoneSocialStudio.Publishing.Slot

@@ -8,6 +8,8 @@ defmodule FlyrankCapstoneSocialStudio.Content.Post do
     field :content, :string
     field :url, :string
     field :external_source_id, :string
+    # Total aggregated campaign cost
+    field :total_ai_cost, :decimal
 
     has_many :variants, FlyrankCapstoneSocialStudio.Content.Variant
 

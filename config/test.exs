@@ -43,3 +43,9 @@ config :phoenix,
 #oban test configuration
 config :flyrank_capstone_social_studio, Oban,
   testing: :manual
+# Ensure Gemini API Key is empty during tests so execution routes to local fallbacks
+System.put_env("GEMINI_API_KEY", "")
+
+# Configure default AI provider adapter for test environment
+config :flyrank_capstone_social_studio,
+  ai_adapter: FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter
