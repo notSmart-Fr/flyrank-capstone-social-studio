@@ -25,11 +25,15 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/flyrank_capstone_social_studio"
 import topbar from "../vendor/topbar"
 
+// Import Petal Components JS Hooks
+import PetalComponents from "../../deps/petal_components/assets/js/petal_components"
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  // Merge colocatedHooks and PetalComponents hooks together
+  hooks: {...colocatedHooks, ...PetalComponents},
 })
 
 // Show progress bar on live navigation and form submits
@@ -80,4 +84,3 @@ if (process.env.NODE_ENV === "development") {
     window.liveReloader = reloader
   })
 }
-

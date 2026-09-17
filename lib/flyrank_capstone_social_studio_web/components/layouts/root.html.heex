@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+ <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <.live_title
-      default="FlyrankCapstoneSocialStudio"
-      suffix=" · Phoenix Framework"
+      default="Flyrank Social Studio"
+      suffix=" · Content Studio"
       phx-no-format
     >{assigns[:page_title]}</.live_title>
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
@@ -17,16 +17,26 @@
         const systemTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
         const setTheme = (theme) => {
+          const resolvedTheme = theme === "system" ? systemTheme() : theme;
+          
           if (theme === "system") {
             localStorage.removeItem("phx:theme");
-            document.documentElement.setAttribute("data-theme", systemTheme());
             document.documentElement.setAttribute("data-theme-source", "system");
           } else {
             localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
             document.documentElement.setAttribute("data-theme-source", "user");
           }
+
+          document.documentElement.setAttribute("data-theme", resolvedTheme);
+          
+          // Toggle .dark class for Tailwind v4 & Petal UI compatibility
+          if (resolvedTheme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
         };
+
         if (!document.documentElement.hasAttribute("data-theme")) {
           setTheme(localStorage.getItem("phx:theme") || "system");
         }
@@ -35,7 +45,7 @@
 
         matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
           if (document.documentElement.getAttribute("data-theme-source") === "system") {
-            document.documentElement.setAttribute("data-theme", systemTheme());
+            setTheme("system");
           }
         });
       })();

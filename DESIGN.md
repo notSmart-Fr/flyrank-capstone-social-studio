@@ -121,3 +121,52 @@ The first version does not include:
 - Analytics tracking, engagement collection, attribution, or performance dashboards.
 
 The mock adapters and deterministic text transformation provide the foundation for those capabilities later without making them part of the initial delivery scope.
+
+# Flyrank Social Studio - UI & UX Architecture Specification
+
+## 1. UX Principles
+* **Speed & Real-time Feedback:** All user actions utilize Phoenix LiveView socket messages (`phx-click`, `phx-submit`) with instant loading spinners and optimistic UI states.
+* **Accessible Component Composition:** Built on Petal Components v4 using native semantic HTML tags, WCAG 2.1 compliance, and keyboard navigation support.
+* **Consistent Theme System:** Universal support for Light and Dark modes via Tailwind v4 CSS variables (`@theme inline`) toggled at the `<html>` root level.
+
+---
+
+## 2. Directory & LiveView Structure
+
+```text
+lib/flyrank_capstone_social_studio_web/
+├── components/
+│   └── layouts/
+│       ├── root.html.heex       # Theme initialization script & HTML wrapper
+│       └── app.html.heex        # Global App Shell (Nav Header, Theme Switch, Footer)
+└── live/
+    ├── content_live/
+    │   ├── index.ex             # Ingestion form & recent posts list state
+    │   └── index.html.heex      # Petal-powered ingestion dashboard
+    ├── post_live/
+    │   ├── show.ex              # Single Post & Variant inspector state
+    │   └── show.html.heex       # Tabbed platform variant inspection template
+    └── analytics_live/
+        ├── index.ex             # AI cost & telemetry metrics state
+        └── index.html.heex      # Real-time analytics dashboard
+```
+
+## 3. User Navigation Flow
+
+### Step 1: Landing & Ingestion (/posts)
+User lands on /posts and views the persistent header with system status. User enters a URL or pastes Markdown content, selects target social platforms, and clicks "Ingest & Generate". LiveView sets @loading: true on the primary button, processes the request via Content.ingest_and_generate/1, updates the list optimistically, and displays a success flash notification.
+
+### Step 2: Inspection & Verification (/posts/:id)
+User clicks "Inspect Variants →" on any post card. LiveView performs a live_redirect to /posts/:id. User inspects side-by-side: original source vs. platform variants (Telegram, X). User verifies AI grounding status badges and uses one-click copy buttons to pull formatted social copy.
+
+### Step 3: Monitoring & Metrics (/analytics)
+User clicks "Analytics" in the navigation header. View displays live stats for accumulated AI cost (total_ai_cost), ingestion throughput, and platform distributions.
+
+## 4. Theme & Accessibility Specifications
+
+- Light Palette: White background (bg-slate-50), Slate cards (bg-white), Blue primary CTA (--color-primary-600).
+- Dark Palette: Dark slate background (dark:bg-slate-900), Slate cards (dark:bg-slate-800), High-contrast text (dark:text-slate-100).
+- Keyboard Control: All interactive elements (Modals, Dropdowns, Tabs) support Tab, Space, Enter, and Escape standard keyboard interactions.
+
+---
+

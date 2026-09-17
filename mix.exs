@@ -11,7 +11,7 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
     ]
   end
 
@@ -75,8 +75,8 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
       {:oban, "~> 2.18"},
-      {:open_api_spex, "~> 3.22"},
-      {:floki, "~> 0.38.4"}
+      {:floki, "~> 0.38.4"},
+      {:petal_components, "~> 4.0"}
     ]
   end
 

@@ -77,3 +77,6 @@ config :phoenix_live_view,
 
 # Disable swoosh api client as it is only required for production adapters.
 config :swoosh, :api_client, false
+# config/dev.exs
+config :phoenix_live_view, :colocated_assets,
+  disable_symlink_warning: true
