@@ -126,4 +126,41 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
       end
     end
   end
+  # 4. Content Hash Deduplication
+  describe "ingest_and_generate/2 deduplication" do
+    test "returns existing post and variants when duplicate content is ingested within 5 minutes" do
+      post_attrs = %{
+        "title" => "Elixir Testing Tips",
+        "content" => "Robust test suites catch concurrent edge cases early.",
+        "source_type" => "markdown"
+      }
+
+      # 1. First Ingestion
+      assert {:ok, {post1, variants1}} = Content.ingest_and_generate(post_attrs, ["telegram"])
+      assert post1.content_hash != nil
+
+      # 2. Second Ingestion with identical title and content
+      assert {:ok, {post2, variants2}} = Content.ingest_and_generate(post_attrs, ["telegram"])
+
+      # Verify it returned the exact same Post record from DB without recreating
+      assert post1.id == post2.id
+      assert Enum.map(variants1, & &1.id) == Enum.map(variants2, & &1.id)
+    end
+
+    test "populates content_hash correctly on Post creation" do
+      post_attrs = %{
+        "title" => "Unique Post Title",
+        "content" => "Unique post content body.",
+        "source_type" => "markdown"
+      }
+
+      {:ok, {post, _variants}} = Content.ingest_and_generate(post_attrs, ["telegram"])
+
+      expected_hash =
+        :crypto.hash(:sha256, "Unique Post Title:Unique post content body.")
+        |> Base.encode16()
+
+      assert post.content_hash == expected_hash
+    end
+  end
 end
