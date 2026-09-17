@@ -1,0 +1,135 @@
+<div class="space-y-6">
+
+  <!-- ================================================================= -->
+  <!-- SECTION 1: BREADCRUMBS & TOP NAVIGATION                           -->
+  <!-- ================================================================= -->
+  <nav aria-label="Breadcrumb" class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+    <.link navigate={~p"/posts"} class="hover:text-primary-600 dark:hover:text-primary-400">
+      Dashboard
+    </.link>
+    <span>/</span>
+    <.link navigate={~p"/posts"} class="hover:text-primary-600 dark:hover:text-primary-400">
+      Posts
+    </.link>
+    <span>/</span>
+    <span class="text-gray-900 dark:text-white font-medium truncate max-w-xs">
+      {@post.title}
+    </span>
+  </nav>
+
+  <!-- ================================================================= -->
+  <!-- SECTION 2: INSPECTOR PAGE HEADER                                  -->
+  <!-- ================================================================= -->
+  <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
+    <div>
+      <.h2 class="text-gray-900 dark:text-white font-bold">{@post.title}</.h2>
+      <div class="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
+        <.badge color="info" variant="outline" label={@post.source_type} />
+        <span>Hash: {String.slice(@post.content_hash || "n/a", 0, 12)}...</span>
+        <span>Inserted: {Calendar.strftime(@post.inserted_at, "%Y-%m-%d %H:%M UTC")}</span>
+      </div>
+    </div>
+
+    <div>
+      <.link navigate={~p"/posts"}>
+        <.button color="gray" variant="outline" size="sm">
+          <.icon name="hero-arrow-left-micro" class="w-4 h-4 mr-1" /> Back to Dashboard
+        </.button>
+      </.link>
+    </div>
+  </header>
+
+  <!-- ================================================================= -->
+  <!-- SECTION 3: SPLIT INSPECTION LAYOUT (SOURCE VS VARIANTS)          -->
+  <!-- ================================================================= -->
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- LEFT PANE: ORIGINAL SOURCE CONTENT -->
+    <section aria-labelledby="source-heading" class="lg:col-span-5 space-y-3">
+      <.h3 id="source-heading" class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+        <.icon name="hero-document-text-micro" class="w-4 h-4 text-primary-600" />
+        Original Ingested Source
+      </.h3>
+
+      <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 h-[calc(100%-2rem)]">
+        <.card_content class="p-4 space-y-4">
+          <div class="p-3 bg-gray-50 dark:bg-gray-950 rounded border border-gray-100 dark:border-gray-800 text-xs font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap max-h-125 overflow-y-auto">
+            {@post.content}
+          </div>
+        </.card_content>
+      </.card>
+    </section>
+
+    <!-- RIGHT PANE: GENERATED PLATFORM VARIANTS -->
+    <section aria-labelledby="variants-heading" class="lg:col-span-7 space-y-3">
+      <.h3 id="variants-heading" class="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+        <.icon name="hero-sparkles-micro" class="w-4 h-4 text-primary-600" />
+        Generated Social Variants
+      </.h3>
+
+      <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
+        <.card_content class="p-5 space-y-4">
+
+          <!-- Platform Selector Tabs -->
+          <div class="flex border-b border-gray-200 dark:border-gray-800 gap-4">
+            <button 
+              type="button"
+              phx-click="select_tab" 
+              phx-value-tab="telegram"
+              class={["py-2 px-1 border-b-2 text-sm font-medium transition-colors flex items-center gap-2", 
+                if(@active_tab == "telegram", do: "border-primary-600 text-primary-600 dark:text-primary-400", else: "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400")]}
+            >
+              Telegram
+            </button>
+
+            <button 
+              type="button"
+              phx-click="select_tab" 
+              phx-value-tab="x"
+              class={["py-2 px-1 border-b-2 text-sm font-medium transition-colors flex items-center gap-2", 
+                if(@active_tab == "x", do: "border-primary-600 text-primary-600 dark:text-primary-400", else: "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400")]}
+            >
+              X / Twitter
+            </button>
+          </div>
+
+          <!-- Active Variant Card Preview -->
+          <div class="space-y-4 pt-2">
+            <div class="flex items-center justify-between">
+              <.badge color="success" variant="solid" class="text-xs">
+                ● 100% Grounded
+              </.badge>
+              
+              <!-- Quick Copy Button using JS onclick -->
+              <.button 
+                color="gray" 
+                variant="outline" 
+                size="xs"
+                onclick="navigator.clipboard.writeText(this.closest('.space-y-4').querySelector('.variant-body').innerText)"
+              >
+                <.icon name="hero-clipboard-document-micro" class="w-4 h-4 mr-1" /> Copy Variant
+              </.button>
+            </div>
+
+            <div class="variant-body p-4 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-sm text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+              <%= if @active_tab == "telegram" do %>
+                🚀 <b>{@post.title}</b>
+
+{@post.content}
+
+#Elixir #LiveView #SoftwareEngineering
+              <% else %>
+                {@post.title} 
+
+{@post.content}
+              <% end %>
+            </div>
+          </div>
+
+        </.card_content>
+      </.card>
+    </section>
+
+  </div>
+
+</div>

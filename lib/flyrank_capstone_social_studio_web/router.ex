@@ -58,6 +58,8 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
 
   # Redirect root "/" to "/posts" for smooth landing UX
   get "/", PageController, :home
+  # Add live route for Post & Variant Inspector
+  live "/posts/:id", PostLive.Show, :show
 end
 
   if Application.compile_env(:flyrank_capstone_social_studio, :dev_routes) do
