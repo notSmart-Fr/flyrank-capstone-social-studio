@@ -5,20 +5,19 @@ openapi: 3.0.0
 # ==============================================================================
 info:
   title: Flyrank Capstone Social Studio API
-  version: 1.0.0
-  description: API documentation for managing blog posts, campaign variants, and social publishing slots.
+  version: 1.1.0
+  description: API documentation for managing blog posts, campaign variants, auto/manual scheduling slots, and idempotent publishing.
 
 servers:
   - url: http://localhost:4000
     description: Local Development Server
-  
 
 # ==============================================================================
 # LOGICAL TAG GROUPS (Sidebar navigation in Scalar)
 # ==============================================================================
 tags:
   - name: Posts
-    description: Blog post ingestion, campaign retrieval, and variant generation
+    description: Blog post ingestion, campaign retrieval, deduplication, and variant generation
   - name: Variants
     description: Variant editing, approvals, and scheduling
   - name: Publishing
@@ -27,7 +26,7 @@ tags:
     description: Health checks
 
 # ==============================================================================
-# DATA SCHEMAS & MODELS (UPDATE DB FIELDS HERE)
+# DATA SCHEMAS & MODELS
 # ==============================================================================
 components:
   schemas:
@@ -62,6 +61,16 @@ components:
               enum: [markdown, url]
               example: markdown
               description: Format of source content
+            url:
+              type: string
+              nullable: true
+              example: "https://example.com/blog/my-first-post"
+              description: Optional canonical URL when source_type is url
+            external_source_id:
+              type: string
+              nullable: true
+              example: "ext_post_88392"
+              description: Unique identifier from external upstream system
         platforms:
           type: array
           description: Target social networks to generate draft variants for
@@ -73,7 +82,6 @@ components:
     # --------------------------------------------------------------------------
     # OUTPUT MODEL: Individual Social Variant
     # Represents a single AI draft + token usage and USD generation cost.
-    # UPDATE HERE: If you add new columns to the `variants` DB table.
     # --------------------------------------------------------------------------
     Variant:
       type: object
@@ -83,6 +91,10 @@ components:
           type: integer
           example: 10
           description: Primary key ID of the variant
+        post_id:
+          type: integer
+          example: 1
+          description: Foreign key pointing to parent Post
         platform:
           type: string
           example: telegram
@@ -106,7 +118,7 @@ components:
           example: "Needs shorter hook"
           description: Reviewer feedback if rejected
 
-        # --- AI Token & Cost Metrics (Gemini Tracking) ---
+        # --- AI Token & Cost Metrics ---
         prompt_tokens:
           type: integer
           example: 240
@@ -123,20 +135,19 @@ components:
           type: number
           format: double
           example: 0.000051
-          description: Calculated USD cost to generate this variant ($0.075/1M input, $0.30/1M output)
+          description: Calculated USD cost to generate this variant
         model_used:
           type: string
           example: gemini-2.5-flash
-          description: AI model name and version responsible for generation
+          description: AI model name responsible for generation
 
     # --------------------------------------------------------------------------
     # OUTPUT MODEL: Campaign / Parent Blog Post
-    # Combines post info, total aggregated campaign cost, and variants array.
-    # UPDATE HERE: If you add campaign-level metadata to the `posts` table.
+    # Combines post info, SHA-256 fingerprint, aggregated AI cost, and variants.
     # --------------------------------------------------------------------------
     Campaign:
       type: object
-      description: Represents the ingested blog post, total aggregated AI cost, and variants array.
+      description: Represents the ingested blog post, deduplication hash, total AI cost, and variants array.
       properties:
         id:
           type: integer
@@ -150,35 +161,90 @@ components:
           type: string
           example: markdown
           description: Source ingestion format
-        
-        # Aggregated AI Campaign Cost
+        content_hash:
+          type: string
+          example: "A3F291B89801C209E7B6C81274F4A2B12389B2"
+          description: Deterministic SHA-256 fingerprint used for 5-minute ingestion deduplication
         total_ai_cost:
           type: number
           format: double
           example: 0.000306
           description: Summed USD generation cost across all platform draft variants in this campaign
-
         variants:
           type: array
           description: Generated platform draft variants attached to this campaign
           items:
             $ref: '#/components/schemas/Variant'
 
+    # --------------------------------------------------------------------------
+    # OUTPUT MODEL: Scheduled Publishing Slot
+    # --------------------------------------------------------------------------
+    Slot:
+      type: object
+      description: Represents a scheduled dispatch slot tied to an approved variant.
+      properties:
+        id:
+          type: integer
+          example: 42
+          description: Primary key ID of the publishing slot
+        variant_id:
+          type: integer
+          example: 10
+          description: ID of the approved variant scheduled for dispatch
+        scheduled_at:
+          type: string
+          format: date-time
+          example: "2026-09-20T10:00:00Z"
+          description: Target publishing timestamp (validated to be in the future)
+        status:
+          type: string
+          enum: [pending, published, failed]
+          example: pending
+          description: Current lifecycle status of the slot
+        idempotency_key:
+          type: string
+          nullable: true
+          example: "key-variant-10-slot-1"
+          description: Unique string guarding against duplicate scheduling requests
+
+    # --------------------------------------------------------------------------
+    # INPUT PAYLOAD: POST /api/variants/{id}/schedule
+    # --------------------------------------------------------------------------
+    ScheduleVariantRequest:
+      type: object
+      properties:
+        scheduled_at:
+          type: string
+          format: date-time
+          example: "2026-09-20T10:00:00Z"
+          description: ISO-8601 UTC timestamp for publishing (required if mode is manual)
+        idempotency_key:
+          type: string
+          example: "client-key-881293"
+          description: Optional idempotency key to prevent duplicate slot creations
+        mode:
+          type: string
+          enum: [manual, auto]
+          default: manual
+          example: auto
+          description: Mode strategy. 'manual' uses explicit scheduled_at; 'auto' calculates next optimal gap.
+
 # ==============================================================================
-# API ROUTE MAPPINGS (URL PATHS & CONTROLLERS)
-# Maps endpoints to their Phoenix controllers and HTTP responses.
+# API ROUTE MAPPINGS
 # ==============================================================================
 paths:
 
   # ----------------------------------------------------------------------------
   # POSTS & CAMPAIGN ENDPOINTS
-  # Controller: PostController & CampaignController
   # ----------------------------------------------------------------------------
   /api/blog-posts:
     post:
       tags: [Posts]
       summary: Ingest a blog post and generate variants
-      description: Ingests source text or URL, invokes Gemini to produce A/B variants, and calculates costs.
+      description: >
+        Ingests source text or URL, computes a SHA-256 payload hash for deduplication,
+        invokes AI variant generation, and aggregates costs. If an identical payload
+        was submitted within 5 minutes, returns the existing post and variants without regenerating.
       operationId: PostController.create
       requestBody:
         required: true
@@ -188,7 +254,7 @@ paths:
               $ref: '#/components/schemas/CreatePostRequest'
       responses:
         '201':
-          description: Campaign created with variants and cost metrics
+          description: Campaign created or retrieved via 5-minute deduplication short-circuit
           content:
             application/json:
               schema:
@@ -221,7 +287,6 @@ paths:
 
   # ----------------------------------------------------------------------------
   # VARIANT EDITING & EDITORIAL LIFECYCLE
-  # Controller: VariantController
   # ----------------------------------------------------------------------------
   /api/variants/{id}:
     patch:
@@ -242,8 +307,11 @@ paths:
           application/json:
             schema:
               type: object
-            example:
-              content: "Updated social post content #tech"
+              properties:
+                content:
+                  type: string
+              example:
+                content: "Updated social post content #tech"
       responses:
         '200':
           description: Variant successfully updated
@@ -281,7 +349,7 @@ paths:
     post:
       tags: [Variants]
       summary: Reject a variant draft
-      description: Flips variant status to 'rejected' and logs mandatory rejection feedback.
+      description: Flips variant status to 'rejected' and logs optional rejection feedback.
       operationId: VariantController.reject
       parameters:
         - name: id
@@ -296,8 +364,11 @@ paths:
           application/json:
             schema:
               type: object
-            example:
-              rejection_reason: "Needs shorter hook and better hashtags"
+              properties:
+                rejection_reason:
+                  type: string
+              example:
+                rejection_reason: "Needs shorter hook and better hashtags"
       responses:
         '200':
           description: Variant status updated to 'rejected'
@@ -312,7 +383,10 @@ paths:
     post:
       tags: [Variants]
       summary: Schedule an approved variant for publishing
-      description: Enforces invariant check (status must be 'approved') and creates a publishing Slot with an Idempotency Key.
+      description: >
+        Enforces status check (must be 'approved'), validates that scheduled_at is in the future,
+        creates a publishing Slot with an optional Idempotency Key, and enqueues an Oban job.
+        Supports 'manual' and 'auto' scheduling modes.
       operationId: VariantController.schedule
       parameters:
         - name: id
@@ -321,25 +395,36 @@ paths:
           schema:
             type: integer
           description: Variant ID
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [manual, auto]
+            default: manual
+          description: Optional mode strategy ('manual' or 'auto')
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
-              type: object
-            example:
-              scheduled_at: "2026-09-20T10:00:00Z"
+              $ref: '#/components/schemas/ScheduleVariantRequest'
       responses:
         '201':
-          description: Publishing slot created successfully
+          description: Publishing slot created and enqueued successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Slot'
         '403':
           description: "Refused: Variant is in draft or rejected state"
+        '409':
+          description: Duplicate idempotency_key conflict
         '422':
-          description: Invalid datetime or scheduling payload
+          description: Invalid datetime (e.g. past timestamp) or invalid scheduling payload
 
   # ----------------------------------------------------------------------------
   # PUBLISHING EXECUTION & AUDIT LOGS
-  # Controller: SlotController & CampaignController
   # ----------------------------------------------------------------------------
   /api/slots/{id}/publish:
     post:
@@ -372,7 +457,6 @@ paths:
 
   # ----------------------------------------------------------------------------
   # SYSTEM HEALTH
-  # Controller: HealthController
   # ----------------------------------------------------------------------------
   /api/health:
     get:

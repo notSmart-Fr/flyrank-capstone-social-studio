@@ -17,10 +17,29 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # ===========================================================================
 
   @doc """
-  Schedules an approved variant into a publication slot and enqueues an Oban job.
+  Schedules an approved variant into a publication slot and enqueues its dispatch job.
 
-  Returns `{:error, :unapproved_variant}` if the variant status is not `"approved"`.
-  If a failed slot exists for this variant, it resets the slot to `"pending"` and re-enqueues it.
+  ## Options
+
+    * `:mode` - Specifies the scheduling calculation mode.
+      * `:manual` (default) - Uses the explicit `"scheduled_at"` timestamp provided in `attrs`
+        (falling back to `DateTime.utc_now/0`).
+      * `:auto` - Automatically calculates the next optimal time gap for the variant's platform.
+
+  ## Behaviors & Guarantees
+
+    * **Idempotency Check:** When `idempotency_key` is present in `attrs`, attempts to directly insert
+      the slot using database-level unique constraints. Returns `{:error, changeset}` on conflict.
+    * **Concurrency Lock:** When no `idempotency_key` is provided, executes inside a transaction with
+      a `FOR UPDATE` lock on the `%Variant{}` row to prevent race conditions.
+    * **Retry Handling:** Re-uses existing `%Slot{status: "failed"}` records by resetting status to
+      `"pending"`, updating `scheduled_at`, and re-enqueueing the Oban job.
+
+  ## Return Values
+
+    * `{:ok, %Slot{}}` - Successfully created or updated slot.
+    * `{:error, %Ecto.Changeset{}}` - Validation failure or duplicate `idempotency_key`.
+    * `{:error, :unapproved_variant}` - Returned if `%Variant{status: status}` is not `"approved"`.
   """
 # 1. Function Header defining default argument (no body)
 def schedule_variant(variant, attrs, opts \\ [])
