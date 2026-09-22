@@ -98,18 +98,19 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     |> Repo.update()
   end
 
-  # ===========================================================================
+# ===========================================================================
   # Ingestion & Variant Generation Pipeline
   # ===========================================================================
 
   @doc """
-  Ingests a post (from raw text/markdown or an external web URL) and generates
-  initial platform draft variants atomically inside a database transaction.
+  Ingests a post (from raw text/markdown or an external web URL) and constructs
+  initial platform draft variants locally using `ConstraintProfile` definitions
+  without making external AI API calls.
 
   If `source_type` is set to `"url"`, the web page content is fetched and extracted
   over HTTP *before* opening the DB transaction to prevent pool starvation.
   """
-  def ingest_and_generate(post_attrs, platforms \\ ["telegram", "mock_x", "mock_linkedin"]) do
+  def ingest_and_template(post_attrs, platforms \\ ["telegram", "mock_x", "mock_linkedin"]) do
     with {:ok, resolved_attrs} <- resolve_post_attrs(post_attrs) do
       # 1. Compute deterministic hash from resolved parameters
       title = resolved_attrs["title"] || ""
@@ -123,14 +124,41 @@ defmodule FlyrankCapstoneSocialStudio.Content do
           {:ok, {existing_post, list_variants_for_post(existing_post.id)}}
 
         nil ->
-          # 3. New submission: Proceed with transaction
-          execute_ingest_transaction(resolved_attrs, hash, platforms)
+          # 3. New submission: Proceed with local template ingestion transaction
+          execute_template_ingest_transaction(resolved_attrs, hash, platforms)
       end
     end
   end
 
   @doc """
-  Generates both Variant A and Variant B drafts for a given platform.
+  Generates a local, rule-based template draft variant for a given platform
+  using its defined `ConstraintProfile` rules (character limits, tone, hashtags)
+  without calling Gemini.
+  """
+  def create_template_variant_for_platform(%Post{} = post, platform) do
+    case ConstraintProfile.get(platform) do
+      nil ->
+        {:error, :unsupported_platform}
+
+      profile ->
+        formatted_content = build_template_content(post, profile)
+
+        create_variant(%{
+          post_id: post.id,
+          platform: platform,
+          content: formatted_content,
+          status: "draft",
+          model_used: "Local Constraint Template"
+        })
+    end
+  end
+
+  @doc """
+  Triggered explicitly on-demand to generate both Variant A and Variant B drafts
+  for a given platform using Gemini Flash.
+
+  Executes grounding verification checks against the source post content and records
+  token usage and AI generation costs upon completion.
   """
   def generate_variant_for_platform(%Post{} = post, platform) do
     case ConstraintProfile.get(platform) do
@@ -180,6 +208,8 @@ defmodule FlyrankCapstoneSocialStudio.Content do
                    generation_cost: half_cost,
                    model_used: result.model
                  }) do
+              # Recalculate parent post aggregated AI cost
+              update_post_total_ai_cost(post.id)
               {:ok, [var_a, var_b]}
             end
 
@@ -226,8 +256,8 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   # Private Helpers
   # ===========================================================================
 
-  # Executes post creation, variant generation, and cost aggregation inside a DB transaction
-  defp execute_ingest_transaction(resolved_attrs, hash, platforms) do
+  # Executes post creation and local template variant generation inside a DB transaction
+  defp execute_template_ingest_transaction(resolved_attrs, hash, platforms) do
     Repo.transaction(fn ->
       attrs_with_hash = Map.put(resolved_attrs, "content_hash", hash)
 
@@ -236,33 +266,49 @@ defmodule FlyrankCapstoneSocialStudio.Content do
           variants =
             platforms
             |> Enum.map(fn platform ->
-              case generate_variant_for_platform(post, platform) do
-                {:ok, ab_variants} -> ab_variants
-                {:error, reason_or_changeset} -> Repo.rollback(reason_or_changeset)
+              case create_template_variant_for_platform(post, platform) do
+                {:ok, variant} -> variant
+                {:error, reason} -> Repo.rollback(reason)
               end
             end)
-            |> List.flatten()
 
-          # Sum generation costs
-          total_cost =
-            Enum.reduce(variants, Decimal.new("0.0"), fn v, acc ->
-              cost = v.generation_cost || Decimal.new("0.0")
-              Decimal.add(acc, cost)
-            end)
-
-          # Update parent Post with aggregated AI costs
-          case update_post(post, %{total_ai_cost: total_cost}) do
-            {:ok, updated_post} ->
-              {updated_post, variants}
-
-            {:error, changeset} ->
-              Repo.rollback(changeset)
-          end
+          {post, variants}
 
         {:error, changeset} ->
           Repo.rollback(changeset)
       end
     end)
+  end
+
+  # Local rule-based draft generator respecting platform constraints dynamically
+  defp build_template_content(%Post{title: title, content: content}, %ConstraintProfile{} = profile) do
+    # Generate allowed number of hashtags dynamically based on profile limit
+    tags =
+      case profile.max_hashtags do
+        0 -> ""
+        1 -> "\n\n#tech"
+        _ -> "\n\n#tech #update"
+      end
+
+    max_body_len = max(0, profile.max_length - (String.length(title) + String.length(tags) + 10))
+    snippet = String.slice(content || "", 0, max_body_len)
+
+    "📌 #{title}\n\n#{snippet}#{tags}"
+    |> String.slice(0, profile.max_length)
+  end
+
+  # Recalculates aggregated total AI cost on the parent post
+  defp update_post_total_ai_cost(post_id) do
+    post = get_post!(post_id)
+    variants = list_variants_for_post(post_id)
+
+    total_cost =
+      Enum.reduce(variants, Decimal.new("0.0"), fn v, acc ->
+        cost = v.generation_cost || Decimal.new("0.0")
+        Decimal.add(acc, cost)
+      end)
+
+    update_post(post, %{total_ai_cost: total_cost})
   end
 
   # Fetches a post created within lookback_seconds matching the content hash
@@ -289,36 +335,33 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     {"rejected", "Grounding Audit Failed: Fake or unsupported claims detected -> #{Enum.join(claims, ", ")}"}
   end
 
- # Fetches HTML content from URL outside the DB transaction if source_type == "url"
-defp resolve_post_attrs(%{"source_type" => "url"} = attrs) do
-  # Extract URL whether passed in "content" or "url" key
-  url = Map.get(attrs, "url") || Map.get(attrs, "content")
+  # Fetches HTML content from URL outside the DB transaction if source_type == "url"
+  defp resolve_post_attrs(%{"source_type" => "url"} = attrs) do
+    url = Map.get(attrs, "url") || Map.get(attrs, "content")
 
-  case url do
-    url when is_binary(url) and url != "" ->
-      case UrlFetcher.fetch_and_extract(url) do
-        {:ok, extracted_text} ->
-          updated_attrs =
-            attrs
-            |> Map.put("url", url)
-            |> Map.put("content", extracted_text) # Replaces the URL string with scraped article text
-            |> Map.update("title", "Fetched: #{url}", fn
-              "" -> "Fetched: #{url}"
-              existing -> existing
-            end)
+    case url do
+      url when is_binary(url) and url != "" ->
+        case UrlFetcher.fetch_and_extract(url) do
+          {:ok, extracted_text} ->
+            updated_attrs =
+              attrs
+              |> Map.put("url", url)
+              |> Map.put("content", extracted_text)
+              |> Map.update("title", "Fetched: #{url}", fn
+                "" -> "Fetched: #{url}"
+                existing -> existing
+              end)
 
-          {:ok, updated_attrs}
+            {:ok, updated_attrs}
 
-        {:error, reason} ->
-          {:error, reason}
-      end
+          {:error, reason} ->
+            {:error, reason}
+        end
 
-    _ ->
-      # No valid URL string provided
-      {:ok, attrs}
+      _ ->
+        {:ok, attrs}
+    end
   end
 
-end
-
-defp resolve_post_attrs(attrs), do: {:ok, attrs}
+  defp resolve_post_attrs(attrs), do: {:ok, attrs}
 end

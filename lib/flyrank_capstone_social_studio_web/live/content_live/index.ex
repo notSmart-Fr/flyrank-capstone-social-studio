@@ -35,23 +35,19 @@ defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
      |> assign(:changeset, changeset)}
   end
 
-  # Event 2: Ingests post & generates AI variants using Content.ingest_and_generate/2
+  # Event 2: Ingests post & creates local ConstraintProfile template drafts
   @impl true
   def handle_event("save_post", %{"post" => post_params} = params, socket) do
     platforms = Map.get(params, "platforms", ["telegram", "mock_x", "mock_linkedin"])
     socket = assign(socket, :loading, true)
 
-    case Content.ingest_and_generate(post_params, platforms) do
+    case Content.ingest_and_template(post_params, platforms) do
       {:ok, {post, _variants}} ->
-        changeset = Content.change_post(%Post{})
-
         {:noreply,
          socket
-         |> stream_insert(:posts, post, at: 0)
-         |> update(:posts_count, &(&1 + 1))
-         |> assign(:changeset, changeset)
-         |> assign(:loading, false)
-         |> put_flash(:info, "Content ingested and AI variants generated successfully!")}
+         |> put_flash(:info, "Content ingested! Constraint templates prepared.")
+         # 🚀 Navigates directly to the draft editor page
+         |> push_navigate(to: ~p"/posts/#{post.id}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply,

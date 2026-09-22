@@ -9,7 +9,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostController do
   def create(conn, %{"post" => post_params} = params) do
     platforms = Map.get(params, "platforms", ["telegram", "mock_x", "mock_linkedin"])
 
-    case Content.ingest_and_generate(post_params, platforms) do
+    case Content.ingest_and_template(post_params, platforms) do
       {:ok, {post, variants}} ->
         conn
         |> put_status(:created)

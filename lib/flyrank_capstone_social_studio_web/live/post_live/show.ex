@@ -107,7 +107,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
     end
   end
 
-  # Event 5: Generating Variant on-demand if missing
+ # Event 5: Generating Variant on-demand via Gemini Flash
   @impl true
   def handle_event("generate_platform_variant", %{"platform" => platform}, socket) do
     post = socket.assigns.post
@@ -121,13 +121,19 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
          socket
          |> assign(:post, reloaded_post)
          |> assign(:current_variant, current_variant)
-         |> put_flash(:info, "Generated new AI variants for #{platform}!")}
+         |> put_flash(:info, "Generated grounded AI variants for #{String.upcase(platform)} via Gemini Flash!")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Generation failed: #{inspect(reason)}")}
+        {:noreply, put_flash(socket, :error, "AI generation failed: #{inspect(reason)}")}
     end
   end
+# Event: Switching between A/B variants for the current platform
+  @impl true
+  def handle_event("select_variant", %{"variant_id" => variant_id}, socket) do
+    selected_variant = Content.get_variant!(variant_id)
 
+    {:noreply, assign(socket, :current_variant, selected_variant)}
+  end
   # ===========================================================================
   # Private Helpers
   # ===========================================================================
