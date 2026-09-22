@@ -84,9 +84,8 @@ defmodule FlyrankCapstoneSocialStudioWeb do
 
       # HTML escaping functionality
       import Phoenix.HTML
-      # Core UI components
-      import FlyrankCapstoneSocialStudioWeb.CoreComponents
-      import FlyrankCapstoneSocialStudioWeb.StudioComponents
+      # HTML components from Petal UI
+      use PetalComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

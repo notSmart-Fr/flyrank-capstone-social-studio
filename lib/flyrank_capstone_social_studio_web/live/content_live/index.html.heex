@@ -39,7 +39,7 @@
           
           <!-- Field 1: Post Title -->
           <div>
-            <.label for={f[:title].id}>Post Title</.label>
+            <.field_label for={f[:title].id}>Post Title</.field_label>
             <.text_input field={f[:title]} placeholder="e.g. Scaling Elixir Services on Render" />
             <.form_field_error field={f[:title]} />
           </div>
@@ -47,7 +47,7 @@
           <!-- Field 2 & 3: Source Type & Target Platform Checkboxes -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <.label for={f[:source_type].id}>Source Type</.label>
+              <.field_label for={f[:source_type].id}>Source Type</.field_label>
               <.select 
                 field={f[:source_type]} 
                 options={[{"Markdown Text", "markdown"}, {"Web URL", "url"}]} 
@@ -55,7 +55,7 @@
             </div>
 
             <div>
-              <.label>Target Platforms</.label>
+              <.field_label>Target Platforms</.field_label>
               <div class="flex gap-4 items-center pt-2">
                 <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                   <input type="checkbox" name="platforms[]" value="telegram" checked class="rounded text-primary-600 focus:ring-primary-500" />
@@ -71,7 +71,7 @@
 
           <!-- Field 4: Content Textarea -->
           <div>
-            <.label for={f[:content].id}>Source Content or URL</.label>
+            <.field_label for={f[:content].id}>Source Content or URL</.field_label>
             <.textarea 
               field={f[:content]} 
               rows={5} 

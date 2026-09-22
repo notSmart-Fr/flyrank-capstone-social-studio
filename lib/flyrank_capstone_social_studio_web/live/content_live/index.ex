@@ -12,7 +12,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
     {:ok,
      socket
      |> assign(:page_title, "Social Content Studio")
-     |> assign(:posts, posts)
+     |> stream(:posts, posts)
      |> assign(:changeset, changeset)
      |> assign(:loading, false)}
   end
@@ -36,13 +36,11 @@ defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
 
     case Content.create_post(post_params) do
       {:ok, post} ->
-        # Refresh posts list and reset form
-        posts = Content.list_posts()
         changeset = Content.change_post(%Post{})
 
         {:noreply,
          socket
-         |> assign(:posts, posts)
+         |> stream_insert(:posts, post, at: 0) # Inserts new post at top of UI list
          |> assign(:changeset, changeset)
          |> assign(:loading, false)
          |> put_flash(:info, "Post ingested successfully!")}
