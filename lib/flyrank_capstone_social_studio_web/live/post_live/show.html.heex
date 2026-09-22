@@ -127,16 +127,17 @@
 
                 <!-- On-Demand Gemini AI Enhancement Trigger -->
                 <.button 
-                  type="button"
-                  phx-click="generate_platform_variant" 
-                  phx-value-platform={@active_tab}
-                  color="primary" 
-                  variant="outline" 
-                  size="xs"
-                >
-                  <.icon name="hero-sparkles-micro" class="w-4 h-4 mr-1" />
-                  Generate AI A/B Variants
-                </.button>
+  type="button"
+  phx-click="generate_platform_variant" 
+  phx-value-platform={@active_tab}
+  color="primary" 
+  variant="outline" 
+  size="xs"
+  class="group cursor-pointer transition-all duration-200 hover:shadow-sm hover:border-primary-600"
+>
+  <.icon name="hero-sparkles-micro" class="w-4 h-4 mr-1 text-primary-600 transition-transform duration-200 group-hover:scale-125 group-hover:rotate-12" />
+  Generate with AI
+</.button>
               </div>
 
               <!-- A/B Variant Sub-Tab Pills (Shows when multiple variants exist) -->
@@ -172,7 +173,7 @@
 
               <!-- Editable Variant Form -->
               <form phx-submit="save_variant" class="space-y-3">
-                <input type="hidden" name="variant_id" value={@current_variant.id} />
+                <input type="hidden" name="variant_id" value={Map.get(@current_variant, :id)} />
                 
                 <div class="relative">
                   <textarea 
@@ -198,28 +199,50 @@
                     <.button type="submit" color="gray" variant="outline" size="xs">
                       <.icon name="hero-check-micro" class="w-4 h-4 mr-1" /> Save Edits
                     </.button>
-                    <.button 
-                      type="button" 
-                      phx-click="reject_variant" 
-                      phx-value-id={@current_variant.id} 
-                      color="danger" 
-                      variant="outline" 
-                      size="xs"
-                    >
-                      Reject
-                    </.button>
+
+                    <%= if Map.get(@current_variant, :id) do %>
+                      <button
+                        type="button"
+                        phx-click="reject_variant"
+                        phx-value-id={@current_variant.id}
+                        class="text-xs font-medium text-red-600 hover:underline"
+                      >
+                        Reject
+                      </button>
+
+                      <button
+                        type="button"
+                        phx-click="publish_platform"
+                        phx-value-id={@current_variant.id}
+                        class="text-xs font-medium text-green-600 hover:underline"
+                      >
+                        Publish
+                      </button>
+                    <% else %>
+                      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md">
+                        <.icon name="hero-sparkles-micro" class="w-3.5 h-3.5 text-amber-500" />
+                        Unsaved AI Draft — Click 'Save Edits' to persist
+                      </span>
+                    <% end %>
                   </div>
 
-                  <.button 
-                    type="button" 
-                    phx-click="publish_platform" 
-                    phx-value-id={@current_variant.id} 
-                    color="primary" 
-                    variant="solid" 
-                    size="sm"
-                  >
-                    <.icon name="hero-paper-airplane-micro" class="w-4 h-4 mr-1" /> Post to {@active_tab |> String.upcase()}
-                  </.button>
+                  <%= if Map.get(@current_variant, :id) do %>
+                    <.button 
+                      type="button" 
+                      phx-click="publish_platform" 
+                      phx-value-id={@current_variant.id} 
+                      color="primary" 
+                      variant="solid" 
+                      size="sm"
+                    >
+                      <.icon name="hero-paper-airplane-micro" class="w-4 h-4 mr-1" /> Post to {@active_tab |> String.upcase()}
+                    </.button>
+                  <% else %>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md">
+                      <.icon name="hero-sparkles-micro" class="w-3.5 h-3.5 text-amber-500" />
+                      Draft Preview
+                    </span>
+                  <% end %>
                 </div>
               </form>
             </div>
@@ -247,3 +270,83 @@
   </div>
 
 </div>
+
+<!-- ================================================================= -->
+<!-- A/B VARIANT SELECTION MODAL                                         -->
+<!-- ================================================================= -->
+<%= if @show_ab_modal && @ai_candidates do %>
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-4">
+        <div class="flex items-center gap-2">
+          <.icon name="hero-sparkles-micro" class="w-5 h-5 text-primary-600" />
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+            Select Preferred AI Variant ({String.upcase(@active_tab)})
+          </h3>
+        </div>
+
+        <button
+          type="button"
+          phx-click="close_ab_modal"
+          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm font-semibold"
+        >
+          ✕ Close
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="border border-gray-200 dark:border-gray-800 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/40 hover:border-primary-500 dark:hover:border-primary-500 transition-all flex flex-col justify-between space-y-4">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 rounded-md">
+                Variant A
+              </span>
+              <span class="text-xs text-gray-400 font-mono">
+                Model: {@ai_candidates.a.model_used}
+              </span>
+            </div>
+            <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 min-h-[140px]">
+              {@ai_candidates.a.content}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            phx-click="select_ab_choice"
+            phx-value-choice="A"
+            class="w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <.icon name="hero-check-micro" class="w-4 h-4" />
+            Use Variant A
+          </button>
+        </div>
+
+        <div class="border border-gray-200 dark:border-gray-800 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/40 hover:border-primary-500 dark:hover:border-primary-500 transition-all flex flex-col justify-between space-y-4">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="px-2.5 py-1 text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 rounded-md">
+                Variant B
+              </span>
+              <span class="text-xs text-gray-400 font-mono">
+                Model: {@ai_candidates.b.model_used}
+              </span>
+            </div>
+            <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 min-h-[140px]">
+              {@ai_candidates.b.content}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            phx-click="select_ab_choice"
+            phx-value-choice="B"
+            class="w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <.icon name="hero-check-micro" class="w-4 h-4" />
+            Use Variant B
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+<% end %>

@@ -13,7 +13,7 @@
     
     <!-- Real-time counter badge -->
     <div class="flex items-center gap-2">
-      <.badge color="info" variant="outline" class="border! border-blue-200! bg-blue-50 text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300">
+      <.badge color="info" variant="outline" class="border! border-blue-200! bg-blue-50 text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300 cursor-pointer hover:bg-primary-700 transition-colors">
         {@posts_count} Ingested Posts
       </.badge>
     </div>
@@ -109,11 +109,20 @@
 
           <!-- Submit Button -->
           <div class="flex justify-end pt-2">
-            <.button color="primary" variant="solid" type="submit" loading={@loading} class="shadow-sm px-5 py-2.5">
-              <.icon name="hero-sparkles-micro" class="w-4 h-4 mr-2" />
-              Ingest & Generate Variants
-            </.button>
-          </div>
+  <.button 
+    color="primary" 
+    variant="solid" 
+    type="submit" 
+    loading={@loading} 
+    class="group relative overflow-hidden shadow-sm hover:shadow-md px-5 py-2.5 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+  >
+    <.icon 
+      name="hero-sparkles-micro" 
+      class="w-4 h-4 mr-2 text-primary-100 transition-transform duration-300 group-hover:scale-125 group-hover:rotate-12" 
+    />
+    <span>Ingest & Generate Variants</span>
+  </.button>
+</div>
 
         </.form>
       </.card_content>
@@ -163,7 +172,7 @@
       phx-click="delete_post"
       phx-value-id={post.id}
       data-confirm="Are you sure you want to delete this post?"
-      class="text-red-600 hover:text-red-700 font-medium hover:underline"
+      class="text-red-600 hover:text-red-700 font-medium hover:underline cursor-pointer hover:bg-primary-700 transition-colors"
     >
       Delete
     </button>

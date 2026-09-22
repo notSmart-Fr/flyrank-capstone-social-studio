@@ -18,7 +18,8 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> assign(:active_tab, active_tab)
      |> assign(:current_variant, current_variant)
      |> assign(:ai_candidates, nil)
-     |> assign(:is_unsaved_ai_draft, false)}
+     |> assign(:is_unsaved_ai_draft, false)
+     |> assign(:show_ab_modal, false)}
   end
 
   # ===========================================================================
@@ -35,7 +36,8 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> assign(:active_tab, tab_name)
      |> assign(:current_variant, current_variant)
      |> assign(:ai_candidates, nil)
-     |> assign(:is_unsaved_ai_draft, false)}
+     |> assign(:is_unsaved_ai_draft, false)
+     |> assign(:show_ab_modal, false)}
   end
 
   # Event 2: Editing & Saving Variant text edits (Handles both DB records & unsaved AI drafts)
@@ -72,6 +74,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
          |> assign(:current_variant, active_variant)
          |> assign(:ai_candidates, nil)
          |> assign(:is_unsaved_ai_draft, false)
+         |> assign(:show_ab_modal, false)
          |> put_flash(:info, "Variant saved to database successfully!")}
 
       {:error, _reason} ->
@@ -139,19 +142,61 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
         {:noreply,
          socket
          |> assign(:ai_candidates, %{a: draft_a, b: draft_b})
-         |> assign(:current_variant, draft_a)
-         |> assign(:is_unsaved_ai_draft, true)
-         |> put_flash(
-           :info,
-           "Generated in-memory AI drafts for #{String.upcase(platform)} via Gemini! Click 'Save Edits' to persist to DB."
-         )}
+         |> assign(:show_ab_modal, true)
+         |> put_flash(:info, "AI A/B variants generated! Choose your preferred draft.")}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "AI generation failed: #{inspect(reason)}")}
     end
   end
+  # Event 6: User selects Variant A or B from the modal and persists it
+  @impl true
+  def handle_event("select_ab_choice", %{"choice" => choice}, socket) do
+    candidates = socket.assigns.ai_candidates
+    post = socket.assigns.post
+    platform = socket.assigns.active_tab
 
-  # Event 6: Toggle between unsaved A/B candidates in LiveView memory
+    selected_draft = if choice == "B", do: candidates.b, else: candidates.a
+
+    # Auto-save the selected variant directly into PostgreSQL
+    variant_params = %{
+      post_id: post.id,
+      platform: platform,
+      variant_label: choice, # "A" or "B"
+      content: selected_draft.content,
+      status: selected_draft.status,
+      rejection_reason: selected_draft.rejection_reason,
+      model_used: selected_draft.model_used,
+      prompt_tokens: Map.get(selected_draft, :prompt_tokens, 0),
+      completion_tokens: Map.get(selected_draft, :completion_tokens, 0),
+      total_tokens: Map.get(selected_draft, :total_tokens, 0),
+      generation_cost: Map.get(selected_draft, :generation_cost, Decimal.new("0.0"))
+    }
+
+    case Content.create_variant(variant_params) do
+      {:ok, saved_variant} ->
+        # Reload post variants so tab switches instantly recognize the new variant
+        updated_post = Content.get_post!(post.id)
+
+        {:noreply,
+         socket
+         |> assign(:post, updated_post)
+         |> assign(:current_variant, saved_variant)
+         |> assign(:show_ab_modal, false)
+         |> put_flash(:info, "Variant #{choice} saved to database for #{String.upcase(platform)}!")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Failed to persist selected variant.")}
+    end
+  end
+
+  # Event 7: Close modal without choosing a variant
+  @impl true
+  def handle_event("close_ab_modal", _params, socket) do
+    {:noreply, assign(socket, :show_ab_modal, false)}
+  end
+
+  # Event 8: Toggle between unsaved A/B candidates in LiveView memory
   @impl true
   def handle_event("select_ai_candidate", %{"label" => label}, socket) do
     candidates = socket.assigns.ai_candidates
@@ -162,10 +207,13 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
         _ -> candidates.a
       end
 
-    {:noreply, assign(socket, :current_variant, selected)}
+    {:noreply,
+     socket
+     |> assign(:current_variant, selected)
+     |> assign(:is_unsaved_ai_draft, true)}
   end
 
-  # Event 7: Switching between persisted DB variants
+  # Event 9: Switching between persisted DB variants
   @impl true
   def handle_event("select_variant", %{"variant_id" => variant_id}, socket) do
     selected_variant = Content.get_variant!(variant_id)
@@ -173,7 +221,8 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
     {:noreply,
      socket
      |> assign(:current_variant, selected_variant)
-     |> assign(:is_unsaved_ai_draft, false)}
+     |> assign(:is_unsaved_ai_draft, false)
+     |> assign(:show_ab_modal, false)}
   end
 
   # ===========================================================================

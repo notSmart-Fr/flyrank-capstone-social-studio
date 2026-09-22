@@ -39,7 +39,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
     post = Content.get_post!(id)
 
     case Content.delete_post(post) do
-      {:ok, deleted_post} ->
+      {:ok, _deleted_post} ->
         # Calculate new count (or call Content.count_posts())
         new_count = max(0, socket.assigns.posts_count - 1)
 

@@ -29,6 +29,7 @@ services:
       PHX_HOST: localhost
       PORT: 4000
       PHX_SERVER: "true"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     depends_on:
       db:
         condition: service_healthy

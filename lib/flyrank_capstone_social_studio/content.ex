@@ -5,6 +5,8 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   """
 
   import Ecto.Query, warn: false
+  alias Ecto.Multi
+  alias FlyrankCapstoneSocialStudio.Content.AiGeneration
   alias FlyrankCapstoneSocialStudio.Content.AiGenerator
   alias FlyrankCapstoneSocialStudio.Content.ConstraintProfile
   alias FlyrankCapstoneSocialStudio.Content.GroundingVerifier
@@ -12,7 +14,6 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   alias FlyrankCapstoneSocialStudio.Content.UrlFetcher
   alias FlyrankCapstoneSocialStudio.Content.Variant
   alias FlyrankCapstoneSocialStudio.Repo
-  alias Ecto.Multi
 
   # ===========================================================================
   # Post CRUD Operations
@@ -46,28 +47,24 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     |> Repo.update()
   end
 
-@doc """
-Deletes a Post and cleans up all associated child records in a transaction.
-"""
-alias Ecto.Multi
-
-@doc """
-Deletes a Post and cleans up all associated child records in a transaction.
-"""
-def delete_post(%Post{} = post) do
-  Multi.new()
-  # 1. Delete associated variants
-  |> Multi.delete_all(:delete_variants, Ecto.assoc(post, :variants))
-  # 2. Delete associated AI generation logs (if ai_generations exists on Post)
-  # |> Multi.delete_all(:delete_ai_generations, Ecto.assoc(post, :ai_generations))
-  # 3. Delete the parent post
-  |> Multi.delete(:delete_post, post)
-  |> Repo.transaction()
-  |> case do
-    {:ok, %{delete_post: deleted_post}} -> {:ok, deleted_post}
-    {:error, _failed_operation, reason, _changes} -> {:error, reason}
+  @doc """
+  Deletes a Post and cleans up all associated child records in a transaction.
+  """
+  def delete_post(%Post{} = post) do
+    Multi.new()
+    # 1. Delete associated variants
+    |> Multi.delete_all(:delete_variants, Ecto.assoc(post, :variants))
+    # 2. Delete associated AI generation logs (if ai_generations exists on Post)
+    # |> Multi.delete_all(:delete_ai_generations, Ecto.assoc(post, :ai_generations))
+    # 3. Delete the parent post
+    |> Multi.delete(:delete_post, post)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{delete_post: deleted_post}} -> {:ok, deleted_post}
+      {:error, _failed_operation, reason, _changes} -> {:error, reason}
+    end
   end
-end
+
   @doc """
   Returns an `%Ecto.Changeset{}` for tracking post changes.
   """
@@ -170,70 +167,6 @@ end
   end
 
   @doc """
-  Generates in-memory Variant A and Variant B drafts via Gemini Flash without
-  persisting them to the database until selected by the user.
-
-  Executes grounding verification checks against the source post content and records
-  token usage and AI generation costs on the draft map payload.
-  """
-  def generate_ai_drafts(%Post{} = post, platform) do
-    case ConstraintProfile.get(platform) do
-      nil ->
-        {:error, :unsupported_platform}
-
-      profile ->
-        case AiGenerator.generate_ab_variants(post.content, platform, profile) do
-          {:ok, result} ->
-            # 1. Run Grounding Verification on both generated variants
-            ground_a = GroundingVerifier.verify_grounding(post.content, result.variant_a)
-            ground_b = GroundingVerifier.verify_grounding(post.content, result.variant_b)
-
-            # 2. Determine status and rejection reasons based on grounding results
-            {status_a, reason_a} = determine_grounding_status(ground_a)
-            {status_b, reason_b} = determine_grounding_status(ground_b)
-
-            # Halve token counts/cost per variant for split attribution
-            half_cost = Decimal.div(result.cost, 2)
-            half_prompt = div(result.prompt_tokens, 2)
-            half_completion = div(result.completion_tokens, 2)
-
-            # 3. Build in-memory draft maps (NO DB INSERTION)
-            draft_a = %{
-              platform: platform,
-              variant_label: "A",
-              content: result.variant_a,
-              status: status_a,
-              rejection_reason: reason_a,
-              prompt_tokens: half_prompt,
-              completion_tokens: half_completion,
-              total_tokens: half_prompt + half_completion,
-              generation_cost: half_cost,
-              model_used: result.model
-            }
-
-            draft_b = %{
-              platform: platform,
-              variant_label: "B",
-              content: result.variant_b,
-              status: status_b,
-              rejection_reason: reason_b,
-              prompt_tokens: half_prompt,
-              completion_tokens: half_completion,
-              total_tokens: half_prompt + half_completion,
-              generation_cost: half_cost,
-              model_used: result.model
-            }
-
-            {:ok, %{variant_a: draft_a, variant_b: draft_b}}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-    end
-  end
-  alias FlyrankCapstoneSocialStudio.Content.AiGeneration
-
-  @doc """
   Generates in-memory AI drafts via Gemini Flash.
   Logs API cost/token usage independently to `ai_generations` for audit telemetry.
   """
@@ -255,24 +188,33 @@ end
             {status_a, reason_a} = determine_grounding_status(ground_a)
             {status_b, reason_b} = determine_grounding_status(ground_b)
 
-            # 3. Return unsaved candidate maps for LiveView socket state
             draft_a = %{
-              platform: platform,
-              variant_label: "A",
-              content: result.variant_a,
-              status: status_a,
-              rejection_reason: reason_a,
-              model_used: result.model
-            }
+  id: nil, # 👈 Added explicit :id key
+  platform: platform,
+  variant_label: "A",
+  content: result.variant_a,
+  status: status_a,
+  rejection_reason: reason_a,
+  model_used: result.model,
+  prompt_tokens: div(result.prompt_tokens, 2),
+  completion_tokens: div(result.completion_tokens, 2),
+  total_tokens: div(result.prompt_tokens + result.completion_tokens, 2),
+  generation_cost: Decimal.div(result.cost, 2)
+}
 
-            draft_b = %{
-              platform: platform,
-              variant_label: "B",
-              content: result.variant_b,
-              status: status_b,
-              rejection_reason: reason_b,
-              model_used: result.model
-            }
+draft_b = %{
+  id: nil, # 👈 Added explicit :id key
+  platform: platform,
+  variant_label: "B",
+  content: result.variant_b,
+  status: status_b,
+  rejection_reason: reason_b,
+  model_used: result.model,
+  prompt_tokens: div(result.prompt_tokens, 2),
+  completion_tokens: div(result.completion_tokens, 2),
+  total_tokens: div(result.prompt_tokens + result.completion_tokens, 2),
+  generation_cost: Decimal.div(result.cost, 2)
+}
 
             {:ok, %{variant_a: draft_a, variant_b: draft_b}}
 
@@ -299,6 +241,8 @@ end
     # Atomically increment total_ai_cost on parent Post
     from(p in Post, where: p.id == ^post_id)
     |> Repo.update_all(inc: [total_ai_cost: result.cost])
+
+    update_post_total_ai_cost(post_id)
   end
 
   # ===========================================================================

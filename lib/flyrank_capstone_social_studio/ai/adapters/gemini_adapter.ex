@@ -9,13 +9,18 @@ defmodule FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter do
 
   @impl true
   def generate_ab_variants(content, platform_name, profile) do
-    api_key = System.get_env("GEMINI_API_KEY")
+    api_key = gemini_api_key()
 
     if api_key && api_key != "" do
       call_gemini_api(content, platform_name, profile, api_key)
     else
       generate_fallback_ab(content, profile)
     end
+  end
+
+  defp gemini_api_key do
+    System.get_env("GEMINI_API_KEY") ||
+      Application.get_env(:flyrank_capstone_social_studio, :gemini_api_key)
   end
 
   defp call_gemini_api(content, platform_name, profile, api_key) do
