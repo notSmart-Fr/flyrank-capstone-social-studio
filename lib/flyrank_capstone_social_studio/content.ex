@@ -12,6 +12,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   alias FlyrankCapstoneSocialStudio.Content.UrlFetcher
   alias FlyrankCapstoneSocialStudio.Content.Variant
   alias FlyrankCapstoneSocialStudio.Repo
+  alias Ecto.Multi
 
   # ===========================================================================
   # Post CRUD Operations
@@ -45,13 +46,28 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     |> Repo.update()
   end
 
-  @doc """
-  Deletes a post.
-  """
-  def delete_post(%Post{} = post) do
-    Repo.delete(post)
-  end
+@doc """
+Deletes a Post and cleans up all associated child records in a transaction.
+"""
+alias Ecto.Multi
 
+@doc """
+Deletes a Post and cleans up all associated child records in a transaction.
+"""
+def delete_post(%Post{} = post) do
+  Multi.new()
+  # 1. Delete associated variants
+  |> Multi.delete_all(:delete_variants, Ecto.assoc(post, :variants))
+  # 2. Delete associated AI generation logs (if ai_generations exists on Post)
+  # |> Multi.delete_all(:delete_ai_generations, Ecto.assoc(post, :ai_generations))
+  # 3. Delete the parent post
+  |> Multi.delete(:delete_post, post)
+  |> Repo.transaction()
+  |> case do
+    {:ok, %{delete_post: deleted_post}} -> {:ok, deleted_post}
+    {:error, _failed_operation, reason, _changes} -> {:error, reason}
+  end
+end
   @doc """
   Returns an `%Ecto.Changeset{}` for tracking post changes.
   """
@@ -154,13 +170,13 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   end
 
   @doc """
-  Triggered explicitly on-demand to generate both Variant A and Variant B drafts
-  for a given platform using Gemini Flash.
+  Generates in-memory Variant A and Variant B drafts via Gemini Flash without
+  persisting them to the database until selected by the user.
 
   Executes grounding verification checks against the source post content and records
-  token usage and AI generation costs upon completion.
+  token usage and AI generation costs on the draft map payload.
   """
-  def generate_variant_for_platform(%Post{} = post, platform) do
+  def generate_ai_drafts(%Post{} = post, platform) do
     case ConstraintProfile.get(platform) do
       nil ->
         {:error, :unsupported_platform}
@@ -181,42 +197,108 @@ defmodule FlyrankCapstoneSocialStudio.Content do
             half_prompt = div(result.prompt_tokens, 2)
             half_completion = div(result.completion_tokens, 2)
 
-            # 3. Create variants with dynamic status ("draft" or "rejected")
-            with {:ok, var_a} <- create_variant(%{
-                   post_id: post.id,
-                   platform: platform,
-                   content: result.variant_a,
-                   variant_label: "A",
-                   status: status_a,
-                   rejection_reason: reason_a,
-                   prompt_tokens: half_prompt,
-                   completion_tokens: half_completion,
-                   total_tokens: half_prompt + half_completion,
-                   generation_cost: half_cost,
-                   model_used: result.model
-                 }),
-                 {:ok, var_b} <- create_variant(%{
-                   post_id: post.id,
-                   platform: platform,
-                   content: result.variant_b,
-                   variant_label: "B",
-                   status: status_b,
-                   rejection_reason: reason_b,
-                   prompt_tokens: half_prompt,
-                   completion_tokens: half_completion,
-                   total_tokens: half_prompt + half_completion,
-                   generation_cost: half_cost,
-                   model_used: result.model
-                 }) do
-              # Recalculate parent post aggregated AI cost
-              update_post_total_ai_cost(post.id)
-              {:ok, [var_a, var_b]}
-            end
+            # 3. Build in-memory draft maps (NO DB INSERTION)
+            draft_a = %{
+              platform: platform,
+              variant_label: "A",
+              content: result.variant_a,
+              status: status_a,
+              rejection_reason: reason_a,
+              prompt_tokens: half_prompt,
+              completion_tokens: half_completion,
+              total_tokens: half_prompt + half_completion,
+              generation_cost: half_cost,
+              model_used: result.model
+            }
+
+            draft_b = %{
+              platform: platform,
+              variant_label: "B",
+              content: result.variant_b,
+              status: status_b,
+              rejection_reason: reason_b,
+              prompt_tokens: half_prompt,
+              completion_tokens: half_completion,
+              total_tokens: half_prompt + half_completion,
+              generation_cost: half_cost,
+              model_used: result.model
+            }
+
+            {:ok, %{variant_a: draft_a, variant_b: draft_b}}
 
           {:error, reason} ->
             {:error, reason}
         end
     end
+  end
+  alias FlyrankCapstoneSocialStudio.Content.AiGeneration
+
+  @doc """
+  Generates in-memory AI drafts via Gemini Flash.
+  Logs API cost/token usage independently to `ai_generations` for audit telemetry.
+  """
+  def generate_ai_drafts(%Post{} = post, platform) do
+    case ConstraintProfile.get(platform) do
+      nil ->
+        {:error, :unsupported_platform}
+
+      profile ->
+        case AiGenerator.generate_ab_variants(post.content, platform, profile) do
+          {:ok, result} ->
+            # 1. Log immutable financial telemetry independently
+            log_ai_generation(post.id, platform, result)
+
+            # 2. Grounding verification
+            ground_a = GroundingVerifier.verify_grounding(post.content, result.variant_a)
+            ground_b = GroundingVerifier.verify_grounding(post.content, result.variant_b)
+
+            {status_a, reason_a} = determine_grounding_status(ground_a)
+            {status_b, reason_b} = determine_grounding_status(ground_b)
+
+            # 3. Return unsaved candidate maps for LiveView socket state
+            draft_a = %{
+              platform: platform,
+              variant_label: "A",
+              content: result.variant_a,
+              status: status_a,
+              rejection_reason: reason_a,
+              model_used: result.model
+            }
+
+            draft_b = %{
+              platform: platform,
+              variant_label: "B",
+              content: result.variant_b,
+              status: status_b,
+              rejection_reason: reason_b,
+              model_used: result.model
+            }
+
+            {:ok, %{variant_a: draft_a, variant_b: draft_b}}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
+  defp log_ai_generation(post_id, platform, result) do
+    # Record individual API call telemetry
+    %AiGeneration{}
+    |> AiGeneration.changeset(%{
+      post_id: post_id,
+      platform: platform,
+      model_used: result.model,
+      prompt_tokens: result.prompt_tokens,
+      completion_tokens: result.completion_tokens,
+      total_tokens: result.prompt_tokens + result.completion_tokens,
+      cost: result.cost
+    })
+    |> Repo.insert!()
+
+    # Atomically increment total_ai_cost on parent Post
+    from(p in Post, where: p.id == ^post_id)
+    |> Repo.update_all(inc: [total_ai_cost: result.cost])
   end
 
   # ===========================================================================
@@ -251,6 +333,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     )
     |> Repo.one()
   end
+
 
   # ===========================================================================
   # Private Helpers

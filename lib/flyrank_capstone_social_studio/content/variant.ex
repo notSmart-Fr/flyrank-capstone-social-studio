@@ -11,6 +11,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
     field :hashtags_count, :integer
     field :character_count, :integer
     field :rejection_reason, :string
+    field :variant_label, :string, virtual: true
     # AI Cost & Token tracking fields
     field :prompt_tokens, :integer
     field :completion_tokens, :integer

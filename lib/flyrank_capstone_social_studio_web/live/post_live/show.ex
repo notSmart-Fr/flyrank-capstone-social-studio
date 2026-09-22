@@ -16,7 +16,9 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> assign(:page_title, "Inspect Post: #{post.title}")
      |> assign(:post, post)
      |> assign(:active_tab, active_tab)
-     |> assign(:current_variant, current_variant)}
+     |> assign(:current_variant, current_variant)
+     |> assign(:ai_candidates, nil)
+     |> assign(:is_unsaved_ai_draft, false)}
   end
 
   # ===========================================================================
@@ -31,26 +33,49 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
     {:noreply,
      socket
      |> assign(:active_tab, tab_name)
-     |> assign(:current_variant, current_variant)}
+     |> assign(:current_variant, current_variant)
+     |> assign(:ai_candidates, nil)
+     |> assign(:is_unsaved_ai_draft, false)}
   end
 
-  # Event 2: Editing & Saving Variant text edits
+  # Event 2: Editing & Saving Variant text edits (Handles both DB records & unsaved AI drafts)
   @impl true
-  def handle_event("save_variant", %{"variant_id" => variant_id, "content" => new_content}, socket) do
-    variant = Content.get_variant!(variant_id)
+  def handle_event("save_variant", %{"content" => new_content} = params, socket) do
+    post = socket.assigns.post
+    current_variant = socket.assigns.current_variant
 
-    case Content.update_variant(variant, %{content: new_content}) do
-      {:ok, updated_variant} ->
-        post = reload_post(socket.assigns.post.id)
+    result =
+      if Map.get(socket.assigns, :is_unsaved_ai_draft, false) do
+        # Save unsaved in-memory AI draft map into PostgreSQL
+        Content.create_variant(
+          Map.merge(current_variant, %{
+            post_id: post.id,
+            content: new_content,
+            status: "draft"
+          })
+        )
+      else
+        # Update existing DB record
+        variant_id = Map.get(params, "variant_id") || Map.get(current_variant, :id)
+        variant = Content.get_variant!(variant_id)
+        Content.update_variant(variant, %{content: new_content})
+      end
+
+    case result do
+      {:ok, _saved_variant} ->
+        reloaded_post = reload_post(post.id)
+        active_variant = find_variant_for_platform(reloaded_post.variants, socket.assigns.active_tab)
 
         {:noreply,
          socket
-         |> assign(:post, post)
-         |> assign(:current_variant, updated_variant)
-         |> put_flash(:info, "Variant content updated successfully!")}
+         |> assign(:post, reloaded_post)
+         |> assign(:current_variant, active_variant)
+         |> assign(:ai_candidates, nil)
+         |> assign(:is_unsaved_ai_draft, false)
+         |> put_flash(:info, "Variant saved to database successfully!")}
 
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Failed to update variant content.")}
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Failed to save variant content.")}
     end
   end
 
@@ -79,12 +104,9 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
   def handle_event("publish_platform", %{"id" => variant_id}, socket) do
     variant = Content.get_variant!(variant_id)
 
-    # 1. Ensure variant is approved (required by Publishing.schedule_variant/3)
     with {:ok, approved_variant} <- ensure_approved(variant),
-         # 2. Schedule variant into publishing queue (or dispatch immediately)
          {:ok, slot} <- Publishing.schedule_variant(approved_variant, %{scheduled_at: DateTime.utc_now()}, mode: :manual) do
 
-      # 3. Trigger immediate dispatch
       case Publishing.dispatch_slot(slot) do
         {:ok, _attempt} ->
           post = reload_post(socket.assigns.post.id)
@@ -107,44 +129,70 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
     end
   end
 
- # Event 5: Generating Variant on-demand via Gemini Flash
+  # Event 5: Generating in-memory AI drafts via Gemini Flash on-demand
   @impl true
   def handle_event("generate_platform_variant", %{"platform" => platform}, socket) do
     post = socket.assigns.post
 
-    case Content.generate_variant_for_platform(post, platform) do
-      {:ok, _variants} ->
-        reloaded_post = reload_post(post.id)
-        current_variant = find_variant_for_platform(reloaded_post.variants, platform)
-
+    case Content.generate_ai_drafts(post, platform) do
+      {:ok, %{variant_a: draft_a, variant_b: draft_b}} ->
         {:noreply,
          socket
-         |> assign(:post, reloaded_post)
-         |> assign(:current_variant, current_variant)
-         |> put_flash(:info, "Generated grounded AI variants for #{String.upcase(platform)} via Gemini Flash!")}
+         |> assign(:ai_candidates, %{a: draft_a, b: draft_b})
+         |> assign(:current_variant, draft_a)
+         |> assign(:is_unsaved_ai_draft, true)
+         |> put_flash(
+           :info,
+           "Generated in-memory AI drafts for #{String.upcase(platform)} via Gemini! Click 'Save Edits' to persist to DB."
+         )}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "AI generation failed: #{inspect(reason)}")}
     end
   end
-# Event: Switching between A/B variants for the current platform
+
+  # Event 6: Toggle between unsaved A/B candidates in LiveView memory
+  @impl true
+  def handle_event("select_ai_candidate", %{"label" => label}, socket) do
+    candidates = socket.assigns.ai_candidates
+
+    selected =
+      case label do
+        "B" -> candidates.b
+        _ -> candidates.a
+      end
+
+    {:noreply, assign(socket, :current_variant, selected)}
+  end
+
+  # Event 7: Switching between persisted DB variants
   @impl true
   def handle_event("select_variant", %{"variant_id" => variant_id}, socket) do
     selected_variant = Content.get_variant!(variant_id)
 
-    {:noreply, assign(socket, :current_variant, selected_variant)}
+    {:noreply,
+     socket
+     |> assign(:current_variant, selected_variant)
+     |> assign(:is_unsaved_ai_draft, false)}
   end
+
   # ===========================================================================
   # Private Helpers
   # ===========================================================================
 
-  defp find_variant_for_platform(variants, platform) when is_list(variants) do
-    Enum.find(variants, fn v ->
-      v.platform == platform or (platform in ["x", "mock_x"] and v.platform in ["x", "mock_x"])
-    end)
-  end
+  defp find_variant_for_platform(variants, platform) do
+    platform_variants = Enum.filter(variants || [], &(Map.get(&1, :platform) == platform))
 
-  defp find_variant_for_platform(_variants, _platform), do: nil
+    ai_variant =
+      platform_variants
+      |> Enum.filter(fn v ->
+        model = Map.get(v, :model_used)
+        model && model != "Local Constraint Template"
+      end)
+      |> List.last()
+
+    ai_variant || List.last(platform_variants)
+  end
 
   defp reload_post(post_id) do
     Content.get_campaign_details(post_id) || Content.get_post!(post_id)

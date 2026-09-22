@@ -12,6 +12,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.Post do
   field :total_ai_cost, :decimal, default: Decimal.new("0.0")
 
   has_many :variants, FlyrankCapstoneSocialStudio.Content.Variant
+  has_many :ai_generations, FlyrankCapstoneSocialStudio.Content.AiGeneration
   timestamps()
 end
 
