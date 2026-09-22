@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
- <head>
+  <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
@@ -14,44 +14,40 @@
     </script>
     <script>
       (() => {
+        const root = document.documentElement;
         const systemTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 
         const setTheme = (theme) => {
           const resolvedTheme = theme === "system" ? systemTheme() : theme;
-          
+
           if (theme === "system") {
             localStorage.removeItem("phx:theme");
-            document.documentElement.setAttribute("data-theme-source", "system");
+            root.setAttribute("data-theme-source", "system");
           } else {
             localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme-source", "user");
+            root.setAttribute("data-theme-source", "user");
           }
 
-          document.documentElement.setAttribute("data-theme", resolvedTheme);
-          
-          // Toggle .dark class for Tailwind v4 & Petal UI compatibility
-          if (resolvedTheme === "dark") {
-            document.documentElement.classList.add("dark");
-          } else {
-            document.documentElement.classList.remove("dark");
-          }
+          root.setAttribute("data-theme", resolvedTheme);
+          root.classList.toggle("dark", resolvedTheme === "dark");
         };
 
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
-        }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+        const storedTheme = localStorage.getItem("phx:theme");
+        setTheme(storedTheme || "system");
 
-        matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-          if (document.documentElement.getAttribute("data-theme-source") === "system") {
+        window.addEventListener("storage", (e) => {
+          if (e.key === "phx:theme") setTheme(e.newValue || "system");
+        });
+
+        matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+          if (root.getAttribute("data-theme-source") === "system") {
             setTheme("system");
           }
         });
       })();
     </script>
   </head>
-  <body>
+  <body class="min-h-screen bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 antialiased transition-colors">
     {@inner_content}
   </body>
 </html>

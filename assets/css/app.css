@@ -2,6 +2,8 @@
 @import "tailwindcss" source(none);
 @import "phoenix-colocated/flyrank_capstone_social_studio/colocated.css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @source "../css";
 @source "../js";
 @source "../../lib/flyrank_capstone_social_studio_web";
@@ -15,7 +17,7 @@
 @import "./colors.css";
 
 /* Plugins */
-@plugin "./tailwind_heroicons.js";
+@plugin "../tailwind_heroicons.js";
 
 /* LiveView loader variants & session wrappers */
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
@@ -23,6 +25,29 @@
 @custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
 
 [data-phx-session], [data-phx-teleported-src] { display: contents }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+html {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+html.dark {
+  background: #030712;
+  color: #f3f4f6;
+  color-scheme: dark;
+}
+
+body {
+  min-height: 100vh;
+  background: inherit;
+  color: inherit;
+}
 
 .phx-no-feedback.invalid-feedback,
 .phx-no-feedback .invalid-feedback {
@@ -32,4 +57,10 @@
 .phx-submit-loading {
   opacity: 0.5;
   transition: opacity 1s ease-out;
+}
+/* 2. Global Base Border Fix for Tailwind v4 + PetalUI */
+@layer base {
+  *, ::after, ::before, ::backdrop, ::file-selector-button {
+    border-color: var(--color-gray-200, #e5e7eb);
+  }
 }

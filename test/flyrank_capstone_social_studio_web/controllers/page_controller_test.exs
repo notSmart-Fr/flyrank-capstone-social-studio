@@ -3,7 +3,9 @@ defmodule FlyrankCapstoneSocialStudioWeb.PageControllerTest do
 
   test "GET / renders the Social Studio live dashboard", %{conn: conn} do
     conn = get(conn, ~p"/")
-    assert html_response(conn, 200) =~ "Social Studio"
-    assert html_response(conn, 200) =~ "Ingest Blog Post"
+    html = html_response(conn, 200)
+
+    assert html =~ "Content Ingestion Studio"
+    assert html =~ "Ingest New Content"
   end
 end

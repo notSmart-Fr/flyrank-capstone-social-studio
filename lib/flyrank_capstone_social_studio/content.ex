@@ -289,21 +289,36 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     {"rejected", "Grounding Audit Failed: Fake or unsupported claims detected -> #{Enum.join(claims, ", ")}"}
   end
 
-  # Fetches HTML content from URL outside the DB transaction if source_type == "url"
-  defp resolve_post_attrs(%{"source_type" => "url", "url" => url} = attrs) when is_binary(url) do
-    case UrlFetcher.fetch_and_extract(url) do
-      {:ok, extracted_text} ->
-        updated_attrs =
-          attrs
-          |> Map.put("content", extracted_text)
-          |> Map.put_new("title", "Fetched: #{url}")
+ # Fetches HTML content from URL outside the DB transaction if source_type == "url"
+defp resolve_post_attrs(%{"source_type" => "url"} = attrs) do
+  # Extract URL whether passed in "content" or "url" key
+  url = Map.get(attrs, "url") || Map.get(attrs, "content")
 
-        {:ok, updated_attrs}
+  case url do
+    url when is_binary(url) and url != "" ->
+      case UrlFetcher.fetch_and_extract(url) do
+        {:ok, extracted_text} ->
+          updated_attrs =
+            attrs
+            |> Map.put("url", url)
+            |> Map.put("content", extracted_text) # Replaces the URL string with scraped article text
+            |> Map.update("title", "Fetched: #{url}", fn
+              "" -> "Fetched: #{url}"
+              existing -> existing
+            end)
 
-      {:error, reason} ->
-        {:error, reason}
-    end
+          {:ok, updated_attrs}
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+
+    _ ->
+      # No valid URL string provided
+      {:ok, attrs}
   end
 
-  defp resolve_post_attrs(attrs), do: {:ok, attrs}
+end
+
+defp resolve_post_attrs(attrs), do: {:ok, attrs}
 end

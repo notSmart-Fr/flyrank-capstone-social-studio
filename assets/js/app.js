@@ -50,6 +50,21 @@ liveSocket.connect()
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
 
+// Keep theme changes outside LiveView's DOM patch lifecycle.
+document.addEventListener("click", event => {
+  const toggle = event.target.closest("[data-theme-toggle]")
+  if (!toggle) return
+
+  event.preventDefault()
+  const root = document.documentElement
+  const nextTheme = root.classList.contains("dark") ? "light" : "dark"
+
+  root.setAttribute("data-theme-source", "user")
+  root.setAttribute("data-theme", nextTheme)
+  root.classList.toggle("dark", nextTheme === "dark")
+  localStorage.setItem("phx:theme", nextTheme)
+})
+
 // The lines below enable quality of life phoenix_live_reload
 // development features:
 //
