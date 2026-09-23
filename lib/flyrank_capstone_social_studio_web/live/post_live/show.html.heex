@@ -9,11 +9,11 @@
     <.link navigate={~p"/posts"} class="hover:text-primary-600 dark:hover:text-primary-400">
       Dashboard
     </.link>
-     <span>/</span>
+    <span>/</span>
     <.link navigate={~p"/posts"} class="hover:text-primary-600 dark:hover:text-primary-400">
       Posts
     </.link>
-     <span>/</span>
+    <span>/</span>
     <span class="text-gray-900 dark:text-white font-medium truncate max-w-xs">
       {@post.title}
     </span>
@@ -24,13 +24,13 @@
   <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
     <div>
       <.h2 class="text-gray-900 dark:text-white font-bold text-2xl">{@post.title}</.h2>
-      
+
       <div class="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
         <.badge color="info" variant="outline" label={@post.source_type} />
         <span>Inserted: {Calendar.strftime(@post.inserted_at, "%Y-%m-%d %H:%M UTC")}</span>
       </div>
     </div>
-    
+
     <div>
       <.link navigate={~p"/posts"}>
         <.button color="gray" variant="outline" size="sm">
@@ -52,7 +52,7 @@
         <.icon name="hero-document-text-micro" class="w-4 h-4 text-primary-600" />
         Original Ingested Source
       </.h3>
-      
+
       <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 h-[calc(100%-2rem)]">
         <.card_content class="p-4 space-y-4">
           <div class="p-3 bg-gray-50 dark:bg-gray-950 rounded border border-gray-100 dark:border-gray-800 text-xs font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap max-h-125 overflow-y-auto">
@@ -70,7 +70,7 @@
         <.icon name="hero-sparkles-micro" class="w-4 h-4 text-primary-600" />
         Social Variants & Editor
       </.h3>
-      
+
       <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
         <.card_content class="p-5 space-y-4">
           <!-- Platform Selector Tabs -->
@@ -89,7 +89,7 @@
             >
               Telegram
             </button>
-            
+
             <button
               type="button"
               phx-click="select_tab"
@@ -104,7 +104,7 @@
             >
               X / Twitter
             </button>
-            
+
             <button
               type="button"
               phx-click="select_tab"
@@ -126,7 +126,7 @@
               <!-- Variant Header Bar & Source Indicator -->
               <div class="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
                 <div class="flex items-center gap-2">
-                  <%= if @current_variant.model_used == "Local Constraint Template" do %>
+                  <%= if (@current_variant.model_used || "Local Constraint Template") == "Local Constraint Template" do %>
                     <.badge color="gray" variant="soft" class="text-xs">
                       📌 Rule-Based Template
                     </.badge>
@@ -135,9 +135,9 @@
                       ✨ Grounded AI Draft
                     </.badge>
                   <% end %>
-                  
+
                   <span class="text-xs text-gray-400">
-                    Model: {@current_variant.model_used || "Local Constraint"}
+                    Model: {@current_variant.model_used || "Local Constraint Template"}
                   </span>
                 </div>
                 <!-- On-Demand Gemini AI Enhancement Trigger / Spinner -->
@@ -165,10 +165,10 @@
                   </.button>
                 <% end %>
               </div>
-              <!-- A/B Variant Sub-Tab Pills (Hidden once a canonical AI choice is selected) -->
+              <!-- A/B Variant Sub-Tab Pills (Hidden when a canonical draft is active) -->
               <% platform_variants =
                 Enum.filter(@post.variants, &(&1.platform == @current_variant.platform)) %>
-              <%= if length(platform_variants) > 1 and not Map.get(assigns, :canonical_selected, false) do %>
+              <%= if length(platform_variants) > 1 and not @canonical_selected do %>
                 <div class="flex items-center gap-2 bg-gray-50 dark:bg-gray-950 p-1.5 rounded-lg border border-gray-200 dark:border-gray-800 w-fit">
                   <%= for variant <- platform_variants do %>
                     <button
@@ -231,7 +231,7 @@
                     <.button type="submit" color="gray" variant="outline" size="xs">
                       <.icon name="hero-check-micro" class="w-4 h-4 mr-1" /> Save Edits
                     </.button>
-                    
+
                     <%= if Map.get(@current_variant, :id) do %>
                       <button
                         type="button"
@@ -241,7 +241,7 @@
                       >
                         Reject
                       </button>
-                      
+
                       <button
                         type="button"
                         phx-click="publish_platform"
@@ -257,7 +257,7 @@
                       </span>
                     <% end %>
                   </div>
-                  
+
                   <%= if Map.get(@current_variant, :id) do %>
                     <.button
                       type="button"
@@ -283,17 +283,27 @@
             <!-- Fallback if no variant exists for active platform tab -->
             <div class="p-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-950 rounded-lg border border-dashed border-gray-200 dark:border-gray-800 space-y-3">
               <p class="text-sm font-medium">No variant generated for {@active_tab} yet.</p>
-              
-              <.button
-                type="button"
-                phx-click="generate_platform_variant"
-                phx-value-platform={@active_tab}
-                color="primary"
-                variant="outline"
-                size="xs"
-              >
-                <.icon name="hero-sparkles-micro" class="w-4 h-4 mr-1" /> Generate with Gemini
-              </.button>
+
+              <%= if @generating do %>
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 dark:bg-primary-950/50 dark:text-primary-300 rounded-lg border border-primary-200 dark:border-primary-800 animate-pulse">
+                  <.icon
+                    name="hero-arrow-path-micro"
+                    class="w-4 h-4 animate-spin text-primary-600"
+                  />
+                  <span>Generating AI Variants...</span>
+                </div>
+              <% else %>
+                <.button
+                  type="button"
+                  phx-click="generate_platform_variant"
+                  phx-value-platform={@active_tab}
+                  color="primary"
+                  variant="outline"
+                  size="xs"
+                >
+                  <.icon name="hero-sparkles-micro" class="w-4 h-4 mr-1" /> Generate with Gemini
+                </.button>
+              <% end %>
             </div>
           <% end %>
         </.card_content>
@@ -314,7 +324,7 @@
             Select Preferred AI Variant ({String.upcase(@active_tab)})
           </h3>
         </div>
-        
+
         <button
           type="button"
           phx-click="close_ab_modal"
@@ -323,7 +333,7 @@
           ✕ Close
         </button>
       </div>
-      
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div class="border border-gray-200 dark:border-gray-800 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/40 hover:border-primary-500 dark:hover:border-primary-500 transition-all flex flex-col justify-between space-y-4">
           <div>
@@ -331,17 +341,17 @@
               <span class="px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 rounded-md">
                 Variant A
               </span>
-              
+
               <span class="text-xs text-gray-400 font-mono">
                 Model: {@ai_candidates.a.model_used}
               </span>
             </div>
-            
+
             <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 min-h-35">
               {@ai_candidates.a.content}
             </p>
           </div>
-          
+
           <button
             type="button"
             phx-click="select_ab_choice"
@@ -351,24 +361,24 @@
             <.icon name="hero-check-micro" class="w-4 h-4" /> Use Variant A
           </button>
         </div>
-        
+
         <div class="border border-gray-200 dark:border-gray-800 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/40 hover:border-primary-500 dark:hover:border-primary-500 transition-all flex flex-col justify-between space-y-4">
           <div>
             <div class="flex items-center justify-between mb-3">
               <span class="px-2.5 py-1 text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 rounded-md">
                 Variant B
               </span>
-              
+
               <span class="text-xs text-gray-400 font-mono">
                 Model: {@ai_candidates.b.model_used}
               </span>
             </div>
-            
+
             <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 min-h-35">
               {@ai_candidates.b.content}
             </p>
           </div>
-          
+
           <button
             type="button"
             phx-click="select_ab_choice"

@@ -1,4 +1,4 @@
-defmodule FlyrankCapstoneSocialStudioWeb.Slices.GenerateAiVariants.Core do
+defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Core do
   @moduledoc """
   Core domain logic for generating A/B social media variants via Gemini
   and verifying grounding against source text.
@@ -41,7 +41,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.Slices.GenerateAiVariants.Core do
               content: result.variant_a,
               status: status_a,
               rejection_reason: reason_a,
-              model_used: result.model,
+              model_used: result.model || "gemini-2.5-flash",
               prompt_tokens: div(result.prompt_tokens, 2),
               completion_tokens: div(result.completion_tokens, 2),
               total_tokens: div(result.prompt_tokens + result.completion_tokens, 2),
@@ -55,7 +55,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.Slices.GenerateAiVariants.Core do
               content: result.variant_b,
               status: status_b,
               rejection_reason: reason_b,
-              model_used: result.model,
+              model_used: result.model || "gemini-2.5-flash",
               prompt_tokens: div(result.prompt_tokens, 2),
               completion_tokens: div(result.completion_tokens, 2),
               total_tokens: div(result.prompt_tokens + result.completion_tokens, 2),

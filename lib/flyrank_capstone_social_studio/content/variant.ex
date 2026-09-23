@@ -35,7 +35,12 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
       :status,
       :hashtags_count,
       :character_count,
-      :rejection_reason
+      :rejection_reason,
+      :model_used,
+      :prompt_tokens,
+      :completion_tokens,
+      :total_tokens,
+      :generation_cost
     ])
     |> validate_required([:platform, :content, :status])
     |> validate_inclusion(:status, ["draft", "approved", "rejected", "published"])

@@ -1,12 +1,20 @@
-defmodule FlyrankCapstoneSocialStudioWeb.Slices.GenerateAiVariants.Worker do
+defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Worker do
   @moduledoc """
   Oban worker for running AI variant generation in the background
   and broadcasting the results to connected LiveViews.
   """
 
-  use Oban.Worker, queue: :default, max_attempts: 3
+  use Oban.Worker,
+    queue: :default,
+    max_attempts: 3,
+    unique: [
+      period: 60,
+      fields: [:args],
+      keys: [:post_id, :platform],
+      states: [:available, :scheduled, :executing, :retryable]
+    ]
 
-  alias FlyrankCapstoneSocialStudioWeb.Slices.GenerateAiVariants.Core
+  alias FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Core
   alias Phoenix.PubSub
 
   @impl Oban.Worker

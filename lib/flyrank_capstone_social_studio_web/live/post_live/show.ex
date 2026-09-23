@@ -3,7 +3,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
 
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
-  alias FlyrankCapstoneSocialStudioWeb.Slices.GenerateAiVariants
+  alias FlyrankCapstoneSocialStudio.Content.GenerateAiVariants
   alias Phoenix.PubSub
 
   @impl true
@@ -26,7 +26,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> assign(:ai_candidates, nil)
      |> assign(:is_unsaved_ai_draft, false)
      |> assign(:show_ab_modal, false)
-     |> assign(:generating, false)
+     |> assign(:generating, check_oban_generating(post.id, active_tab))
      |> assign(:canonical_selected, has_ai_variant?(post.variants, active_tab))}
   end
 
@@ -38,6 +38,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
   @impl true
   def handle_event("select_tab", %{"tab" => tab_name}, socket) do
     current_variant = find_variant_for_platform(socket.assigns.post.variants, tab_name)
+    generating = check_oban_generating(socket.assigns.post.id, tab_name)
 
     {:noreply,
      socket
@@ -46,7 +47,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> assign(:ai_candidates, nil)
      |> assign(:is_unsaved_ai_draft, false)
      |> assign(:show_ab_modal, false)
-     |> assign(:generating, false)
+     |> assign(:generating, generating)
      |> assign(:canonical_selected, has_ai_variant?(socket.assigns.post.variants, tab_name))}
   end
 
@@ -152,15 +153,25 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
   def handle_event("generate_platform_variant", %{"platform" => platform}, socket) do
     post = socket.assigns.post
 
-    case %{post_id: post.id, platform: platform} |> GenerateAiVariants.Worker.new() |> Oban.insert() do
-      {:ok, _job} ->
-        {:noreply, assign(socket, generating: true, active_tab: platform)}
+    if check_oban_generating(post.id, platform) do
+      {:noreply,
+       socket
+       |> assign(:active_tab, platform)
+       |> assign(:generating, true)
+       |> put_flash(:info, "AI generation is already in progress for #{platform}.")}
+    else
+      case %{post_id: post.id, platform: platform}
+           |> GenerateAiVariants.Worker.new()
+           |> Oban.insert() do
+        {:ok, _job} ->
+          {:noreply, assign(socket, generating: true, active_tab: platform)}
 
-      {:error, reason} ->
-        {:noreply,
-         socket
-         |> assign(:generating, false)
-         |> put_flash(:error, "AI generation could not be queued: #{inspect(reason)}")}
+        {:error, reason} ->
+          {:noreply,
+           socket
+           |> assign(:generating, false)
+           |> put_flash(:error, "AI generation could not be queued: #{inspect(reason)}")}
+      end
     end
   end
 
@@ -189,7 +200,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
 
     case Content.create_variant(variant_params) do
       {:ok, saved_variant} ->
-        updated_post = Content.get_post!(post.id)
+        updated_post = reload_post(post.id)
 
         {:noreply,
          socket
@@ -280,6 +291,19 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
       |> List.last()
 
     ai_variant || List.last(platform_variants)
+  end
+
+  defp check_oban_generating(post_id, platform) do
+    import Ecto.Query
+
+    query =
+      from job in Oban.Job,
+        where: job.queue == "default",
+        where: fragment("args->>'post_id' = ?", ^to_string(post_id)),
+        where: fragment("args->>'platform' = ?", ^to_string(platform)),
+        where: job.state in ["available", "executing", "retryable"]
+
+    FlyrankCapstoneSocialStudio.Repo.exists?(query)
   end
 
   defp has_ai_variant?(variants, platform) do
