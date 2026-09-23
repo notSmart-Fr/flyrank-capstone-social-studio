@@ -20,7 +20,13 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
       original_config = Application.get_env(:flyrank_capstone_social_studio, :adapters)
 
       # Swap telegram to use MockX dynamically
-      swapped_config = Keyword.put(original_config, :telegram, FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX)
+      swapped_config =
+        Keyword.put(
+          original_config,
+          :telegram,
+          FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
+        )
+
       Application.put_env(:flyrank_capstone_social_studio, :adapters, swapped_config)
 
       assert Publishing.adapter_for_platform("telegram") ==
@@ -69,7 +75,13 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
         Application.put_env(:flyrank_capstone_social_studio, :ai_adapter, TestMockAiAdapter)
 
         # Call AiGenerator and assert it routed through the swapped mock adapter
-        assert {:ok, result} = AiGenerator.generate_ab_variants("Sample text", "telegram", %{max_length: 280, max_hashtags: 2, tone: "professional"})
+        assert {:ok, result} =
+                 AiGenerator.generate_ab_variants("Sample text", "telegram", %{
+                   max_length: 280,
+                   max_hashtags: 2,
+                   tone: "professional"
+                 })
+
         assert result.variant_a == "Swapped Mock Variant A"
         assert result.model == "swapped-mock-ai"
       after

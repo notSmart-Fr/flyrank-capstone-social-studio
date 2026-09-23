@@ -40,9 +40,9 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
-#oban test configuration
-config :flyrank_capstone_social_studio, Oban,
-  testing: :manual
+
+# oban test configuration
+config :flyrank_capstone_social_studio, Oban, testing: :manual
 # Ensure Gemini API Key is empty during tests so execution routes to local fallbacks
 System.put_env("GEMINI_API_KEY", "")
 

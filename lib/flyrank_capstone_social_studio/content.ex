@@ -6,10 +6,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
 
   import Ecto.Query, warn: false
   alias Ecto.Multi
-  alias FlyrankCapstoneSocialStudio.Content.AiGeneration
-  alias FlyrankCapstoneSocialStudio.Content.AiGenerator
   alias FlyrankCapstoneSocialStudio.Content.ConstraintProfile
-  alias FlyrankCapstoneSocialStudio.Content.GroundingVerifier
   alias FlyrankCapstoneSocialStudio.Content.Post
   alias FlyrankCapstoneSocialStudio.Content.UrlFetcher
   alias FlyrankCapstoneSocialStudio.Content.Variant
@@ -111,7 +108,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     |> Repo.update()
   end
 
-# ===========================================================================
+  # ===========================================================================
   # Ingestion & Variant Generation Pipeline
   # ===========================================================================
 
@@ -166,85 +163,6 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     end
   end
 
-  @doc """
-  Generates in-memory AI drafts via Gemini Flash.
-  Logs API cost/token usage independently to `ai_generations` for audit telemetry.
-  """
-  def generate_ai_drafts(%Post{} = post, platform) do
-    case ConstraintProfile.get(platform) do
-      nil ->
-        {:error, :unsupported_platform}
-
-      profile ->
-        case AiGenerator.generate_ab_variants(post.content, platform, profile) do
-          {:ok, result} ->
-            # 1. Log immutable financial telemetry independently
-            log_ai_generation(post.id, platform, result)
-
-            # 2. Grounding verification
-            ground_a = GroundingVerifier.verify_grounding(post.content, result.variant_a)
-            ground_b = GroundingVerifier.verify_grounding(post.content, result.variant_b)
-
-            {status_a, reason_a} = determine_grounding_status(ground_a)
-            {status_b, reason_b} = determine_grounding_status(ground_b)
-
-            draft_a = %{
-  id: nil, # 👈 Added explicit :id key
-  platform: platform,
-  variant_label: "A",
-  content: result.variant_a,
-  status: status_a,
-  rejection_reason: reason_a,
-  model_used: result.model,
-  prompt_tokens: div(result.prompt_tokens, 2),
-  completion_tokens: div(result.completion_tokens, 2),
-  total_tokens: div(result.prompt_tokens + result.completion_tokens, 2),
-  generation_cost: Decimal.div(result.cost, 2)
-}
-
-draft_b = %{
-  id: nil, # 👈 Added explicit :id key
-  platform: platform,
-  variant_label: "B",
-  content: result.variant_b,
-  status: status_b,
-  rejection_reason: reason_b,
-  model_used: result.model,
-  prompt_tokens: div(result.prompt_tokens, 2),
-  completion_tokens: div(result.completion_tokens, 2),
-  total_tokens: div(result.prompt_tokens + result.completion_tokens, 2),
-  generation_cost: Decimal.div(result.cost, 2)
-}
-
-            {:ok, %{variant_a: draft_a, variant_b: draft_b}}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
-    end
-  end
-
-  defp log_ai_generation(post_id, platform, result) do
-    # Record individual API call telemetry
-    %AiGeneration{}
-    |> AiGeneration.changeset(%{
-      post_id: post_id,
-      platform: platform,
-      model_used: result.model,
-      prompt_tokens: result.prompt_tokens,
-      completion_tokens: result.completion_tokens,
-      total_tokens: result.prompt_tokens + result.completion_tokens,
-      cost: result.cost
-    })
-    |> Repo.insert!()
-
-    # Atomically increment total_ai_cost on parent Post
-    from(p in Post, where: p.id == ^post_id)
-    |> Repo.update_all(inc: [total_ai_cost: result.cost])
-
-    update_post_total_ai_cost(post_id)
-  end
-
   # ===========================================================================
   # State Machine & Review Workflows
   # ===========================================================================
@@ -278,7 +196,6 @@ draft_b = %{
     |> Repo.one()
   end
 
-
   # ===========================================================================
   # Private Helpers
   # ===========================================================================
@@ -308,7 +225,10 @@ draft_b = %{
   end
 
   # Local rule-based draft generator respecting platform constraints dynamically
-  defp build_template_content(%Post{title: title, content: content}, %ConstraintProfile{} = profile) do
+  defp build_template_content(
+         %Post{title: title, content: content},
+         %ConstraintProfile{} = profile
+       ) do
     # Generate allowed number of hashtags dynamically based on profile limit
     tags =
       case profile.max_hashtags do
@@ -322,20 +242,6 @@ draft_b = %{
 
     "📌 #{title}\n\n#{snippet}#{tags}"
     |> String.slice(0, profile.max_length)
-  end
-
-  # Recalculates aggregated total AI cost on the parent post
-  defp update_post_total_ai_cost(post_id) do
-    post = get_post!(post_id)
-    variants = list_variants_for_post(post_id)
-
-    total_cost =
-      Enum.reduce(variants, Decimal.new("0.0"), fn v, acc ->
-        cost = v.generation_cost || Decimal.new("0.0")
-        Decimal.add(acc, cost)
-      end)
-
-    update_post(post, %{total_ai_cost: total_cost})
   end
 
   # Fetches a post created within lookback_seconds matching the content hash
@@ -353,13 +259,6 @@ draft_b = %{
   defp list_variants_for_post(post_id) do
     from(v in Variant, where: v.post_id == ^post_id)
     |> Repo.all()
-  end
-
-  # Parses GroundingVerifier results into status and rejection reason tuples
-  defp determine_grounding_status({:ok, :grounded}), do: {"draft", nil}
-
-  defp determine_grounding_status({:error, :hallucination_detected, claims}) do
-    {"rejected", "Grounding Audit Failed: Fake or unsupported claims detected -> #{Enum.join(claims, ", ")}"}
   end
 
   # Fetches HTML content from URL outside the DB transaction if source_type == "url"

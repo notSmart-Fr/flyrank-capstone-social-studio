@@ -17,7 +17,8 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Slot do
     slot
     |> cast(attrs, [:scheduled_at, :status, :idempotency_key, :variant_id])
     |> validate_required([:scheduled_at, :status, :idempotency_key, :variant_id])
-    |> validate_scheduled_at_in_future() # <--- Added custom validation
+    # <--- Added custom validation
+    |> validate_scheduled_at_in_future()
     |> foreign_key_constraint(:variant_id)
     |> unique_constraint(:idempotency_key)
   end

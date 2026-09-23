@@ -2,47 +2,50 @@
 <header class="border-b border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900 sticky top-0 z-50 backdrop-blur-sm">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
     <div class="flex items-center justify-between">
-      
       <!-- Brand Logo & Live Status -->
       <div class="flex items-center gap-3">
         <.link navigate={~p"/posts"} class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center text-white font-bold">
             F
           </div>
+          
           <span class="font-bold text-lg text-gray-900 dark:text-white">Flyrank Social Studio</span>
         </.link>
+        
         <.badge color="success" variant="outline" class="text-xs">
           ● System Online
         </.badge>
       </div>
-
       <!-- Navigation Links & Theme Switcher -->
       <nav class="flex items-center gap-4">
-        <.link navigate={~p"/posts"} class="text-sm font-medium text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400">
+        <.link
+          navigate={~p"/posts"}
+          class="text-sm font-medium text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400"
+        >
           Studio
         </.link>
-        <.link navigate={~p"/analytics"} class="text-sm font-medium text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400">
+        
+        <.link
+          navigate={~p"/analytics"}
+          class="text-sm font-medium text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400"
+        >
           Analytics
         </.link>
-
-        
-<!-- Dark Mode Toggle Button -->
-<button
-  id="theme-toggle"
-  type="button"
-  data-theme-toggle
-  aria-label="Toggle dark mode"
-  class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
->
-  <.icon name="hero-moon-micro" class="dark:hidden w-4 h-4" />
-  <.icon name="hero-sun-micro" class="hidden dark:block w-4 h-4" />
-</button>
+        <!-- Dark Mode Toggle Button -->
+        <button
+          id="theme-toggle"
+          type="button"
+          data-theme-toggle
+          aria-label="Toggle dark mode"
+          class="inline-flex items-center justify-center rounded-lg border border-gray-200 bg-white p-2 text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-800 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+        >
+          <.icon name="hero-moon-micro" class="dark:hidden w-4 h-4" />
+          <.icon name="hero-sun-micro" class="hidden dark:block w-4 h-4" />
+        </button>
       </nav>
-
     </div>
   </div>
 </header>
-
 <!-- Main App Container with Top/Bottom Margin and Side Padding -->
 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   <div class="w-full">
@@ -51,24 +54,28 @@
         <%= for {kind, message} <- @flash do %>
           <div class={[
             "rounded-lg border px-4 py-3 text-sm",
-            kind == "info" && "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300",
-            kind == "error" && "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300",
-            kind == "warning" && "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-            kind == "success" && "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+            kind == "info" &&
+              "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300",
+            kind == "error" &&
+              "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300",
+            kind == "warning" &&
+              "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+            kind == "success" &&
+              "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
           ]}>
             {message}
           </div>
         <% end %>
       </div>
     <% end %>
-    {@inner_content}
+     {@inner_content}
   </div>
 </main>
-
 <!-- Footer -->
 <footer class="border-t border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900 py-6 mt-12">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 dark:text-gray-400 gap-2">
     <p>© 2026 Flyrank Social Studio. All rights reserved.</p>
+    
     <div class="flex items-center gap-4">
       <span>Built with Elixir & Phoenix LiveView 1.0</span>
     </div>

@@ -2,9 +2,7 @@
 defmodule FlyrankCapstoneSocialStudioWeb.HealthController do
   use FlyrankCapstoneSocialStudioWeb, :controller
 
-
   alias FlyrankCapstoneSocialStudio.Repo
-
 
   def check(conn, _params) do
     case Ecto.Adapters.SQL.query(Repo, "SELECT 1") do

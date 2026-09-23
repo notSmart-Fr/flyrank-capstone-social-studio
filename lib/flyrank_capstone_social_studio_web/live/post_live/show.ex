@@ -3,6 +3,8 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
 
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
+  alias FlyrankCapstoneSocialStudioWeb.Slices.GenerateAiVariants
+  alias Phoenix.PubSub
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -10,6 +12,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
     post = Content.get_campaign_details(id) || Content.get_post!(id)
     active_tab = "telegram"
     current_variant = find_variant_for_platform(post.variants, active_tab)
+
+    if connected?(socket) do
+      PubSub.subscribe(FlyrankCapstoneSocialStudio.PubSub, "post:#{post.id}")
+    end
 
     {:ok,
      socket
@@ -19,7 +25,9 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> assign(:current_variant, current_variant)
      |> assign(:ai_candidates, nil)
      |> assign(:is_unsaved_ai_draft, false)
-     |> assign(:show_ab_modal, false)}
+     |> assign(:show_ab_modal, false)
+     |> assign(:generating, false)
+     |> assign(:canonical_selected, has_ai_variant?(post.variants, active_tab))}
   end
 
   # ===========================================================================
@@ -37,10 +45,12 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> assign(:current_variant, current_variant)
      |> assign(:ai_candidates, nil)
      |> assign(:is_unsaved_ai_draft, false)
-     |> assign(:show_ab_modal, false)}
+     |> assign(:show_ab_modal, false)
+     |> assign(:generating, false)
+     |> assign(:canonical_selected, has_ai_variant?(socket.assigns.post.variants, tab_name))}
   end
 
-  # Event 2: Editing & Saving Variant text edits (Handles both DB records & unsaved AI drafts)
+  # Event 2: Editing & Saving Variant text edits
   @impl true
   def handle_event("save_variant", %{"content" => new_content} = params, socket) do
     post = socket.assigns.post
@@ -48,7 +58,6 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
 
     result =
       if Map.get(socket.assigns, :is_unsaved_ai_draft, false) do
-        # Save unsaved in-memory AI draft map into PostgreSQL
         Content.create_variant(
           Map.merge(current_variant, %{
             post_id: post.id,
@@ -57,7 +66,6 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
           })
         )
       else
-        # Update existing DB record
         variant_id = Map.get(params, "variant_id") || Map.get(current_variant, :id)
         variant = Content.get_variant!(variant_id)
         Content.update_variant(variant, %{content: new_content})
@@ -66,7 +74,9 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
     case result do
       {:ok, _saved_variant} ->
         reloaded_post = reload_post(post.id)
-        active_variant = find_variant_for_platform(reloaded_post.variants, socket.assigns.active_tab)
+
+        active_variant =
+          find_variant_for_platform(reloaded_post.variants, socket.assigns.active_tab)
 
         {:noreply,
          socket
@@ -108,8 +118,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
     variant = Content.get_variant!(variant_id)
 
     with {:ok, approved_variant} <- ensure_approved(variant),
-         {:ok, slot} <- Publishing.schedule_variant(approved_variant, %{scheduled_at: DateTime.utc_now()}, mode: :manual) do
-
+         {:ok, slot} <-
+           Publishing.schedule_variant(approved_variant, %{scheduled_at: DateTime.utc_now()},
+             mode: :manual
+           ) do
       case Publishing.dispatch_slot(slot) do
         {:ok, _attempt} ->
           post = reload_post(socket.assigns.post.id)
@@ -118,7 +130,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
            socket
            |> assign(:post, post)
            |> assign(:current_variant, approved_variant)
-           |> put_flash(:info, "Successfully dispatched and published post to #{String.upcase(approved_variant.platform)}!")}
+           |> put_flash(
+             :info,
+             "Successfully dispatched and published post to #{String.upcase(approved_variant.platform)}!"
+           )}
 
         {:error, reason} ->
           {:noreply, put_flash(socket, :error, "Dispatch failed: #{inspect(reason)}")}
@@ -132,24 +147,24 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
     end
   end
 
-  # Event 5: Generating in-memory AI drafts via Gemini Flash on-demand
+  # Event 5: Triggering Async AI Generation
   @impl true
   def handle_event("generate_platform_variant", %{"platform" => platform}, socket) do
     post = socket.assigns.post
 
-    case Content.generate_ai_drafts(post, platform) do
-      {:ok, %{variant_a: draft_a, variant_b: draft_b}} ->
-        {:noreply,
-         socket
-         |> assign(:ai_candidates, %{a: draft_a, b: draft_b})
-         |> assign(:show_ab_modal, true)
-         |> put_flash(:info, "AI A/B variants generated! Choose your preferred draft.")}
+    case %{post_id: post.id, platform: platform} |> GenerateAiVariants.Worker.new() |> Oban.insert() do
+      {:ok, _job} ->
+        {:noreply, assign(socket, generating: true, active_tab: platform)}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "AI generation failed: #{inspect(reason)}")}
+        {:noreply,
+         socket
+         |> assign(:generating, false)
+         |> put_flash(:error, "AI generation could not be queued: #{inspect(reason)}")}
     end
   end
-  # Event 6: User selects Variant A or B from the modal and persists it
+
+  # Event 6: Persisting Selected A/B Choice
   @impl true
   def handle_event("select_ab_choice", %{"choice" => choice}, socket) do
     candidates = socket.assigns.ai_candidates
@@ -158,11 +173,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
 
     selected_draft = if choice == "B", do: candidates.b, else: candidates.a
 
-    # Auto-save the selected variant directly into PostgreSQL
     variant_params = %{
       post_id: post.id,
       platform: platform,
-      variant_label: choice, # "A" or "B"
+      variant_label: choice,
       content: selected_draft.content,
       status: selected_draft.status,
       rejection_reason: selected_draft.rejection_reason,
@@ -175,7 +189,6 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
 
     case Content.create_variant(variant_params) do
       {:ok, saved_variant} ->
-        # Reload post variants so tab switches instantly recognize the new variant
         updated_post = Content.get_post!(post.id)
 
         {:noreply,
@@ -183,20 +196,24 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
          |> assign(:post, updated_post)
          |> assign(:current_variant, saved_variant)
          |> assign(:show_ab_modal, false)
-         |> put_flash(:info, "Variant #{choice} saved to database for #{String.upcase(platform)}!")}
+         |> assign(:canonical_selected, true)
+         |> put_flash(
+           :info,
+           "Variant #{choice} saved to database for #{String.upcase(platform)}!"
+         )}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Failed to persist selected variant.")}
     end
   end
 
-  # Event 7: Close modal without choosing a variant
+  # Event 7: Close modal
   @impl true
   def handle_event("close_ab_modal", _params, socket) do
     {:noreply, assign(socket, :show_ab_modal, false)}
   end
 
-  # Event 8: Toggle between unsaved A/B candidates in LiveView memory
+  # Event 8: Toggle between unsaved A/B candidates
   @impl true
   def handle_event("select_ai_candidate", %{"label" => label}, socket) do
     candidates = socket.assigns.ai_candidates
@@ -226,6 +243,28 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
   end
 
   # ===========================================================================
+  # Info Callbacks (Oban/PubSub Results)
+  # ===========================================================================
+
+  @impl true
+  def handle_info({:ai_generation_complete, %{a: draft_a, b: draft_b}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:generating, false)
+     |> assign(:ai_candidates, %{a: draft_a, b: draft_b})
+     |> assign(:show_ab_modal, true)
+     |> put_flash(:info, "AI A/B variants generated! Choose your preferred draft.")}
+  end
+
+  @impl true
+  def handle_info({:ai_generation_failed, %{reason: reason}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:generating, false)
+     |> put_flash(:error, "AI generation failed: #{reason}")}
+  end
+
+  # ===========================================================================
   # Private Helpers
   # ===========================================================================
 
@@ -241,6 +280,15 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
       |> List.last()
 
     ai_variant || List.last(platform_variants)
+  end
+
+  defp has_ai_variant?(variants, platform) do
+    (variants || [])
+    |> Enum.filter(&(Map.get(&1, :platform) == platform))
+    |> Enum.any?(fn v ->
+      model = Map.get(v, :model_used)
+      model && model != "Local Constraint Template"
+    end)
   end
 
   defp reload_post(post_id) do

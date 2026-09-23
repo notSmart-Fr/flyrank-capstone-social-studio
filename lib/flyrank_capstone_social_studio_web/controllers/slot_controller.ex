@@ -1,9 +1,7 @@
 defmodule FlyrankCapstoneSocialStudioWeb.SlotController do
   use FlyrankCapstoneSocialStudioWeb, :controller
 
-
   alias FlyrankCapstoneSocialStudio.Publishing
-
 
   def publish(conn, %{"id" => id}) do
     slot = Publishing.get_slot!(id)

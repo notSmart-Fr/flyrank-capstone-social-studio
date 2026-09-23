@@ -70,7 +70,9 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
 
         case get_latest_variant_slot(variant.id) do
           %Slot{status: "failed"} = failed_slot ->
-            {:ok, retry_slot} = update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
+            {:ok, retry_slot} =
+              update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
+
             enqueue_publish_job(retry_slot)
             retry_slot
 
@@ -175,7 +177,8 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
     |> Repo.update()
   end
 
-  def delete_publish_attempt(%PublishAttempt{} = publish_attempt), do: Repo.delete(publish_attempt)
+  def delete_publish_attempt(%PublishAttempt{} = publish_attempt),
+    do: Repo.delete(publish_attempt)
 
   def change_publish_attempt(%PublishAttempt{} = publish_attempt, attrs \\ %{}),
     do: PublishAttempt.changeset(publish_attempt, attrs)

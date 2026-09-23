@@ -181,12 +181,13 @@ defmodule FlyrankCapstoneSocialStudio.PublishingTest do
       assert failed_attempt.error_message =~ "Simulated X platform rate limit"
     end
   end
-  test "slot changeset rejects past scheduled_at timestamps" do
-  past_time = DateTime.utc_now() |> DateTime.add(-3600, :second)
-  attrs = %{scheduled_at: past_time, status: "pending", variant_id: 1, idempotency_key: "k1"}
 
-  changeset = Slot.changeset(%Slot{}, attrs)
-  refute changeset.valid?
-  assert "must be in the future" in errors_on(changeset).scheduled_at
-end
+  test "slot changeset rejects past scheduled_at timestamps" do
+    past_time = DateTime.utc_now() |> DateTime.add(-3600, :second)
+    attrs = %{scheduled_at: past_time, status: "pending", variant_id: 1, idempotency_key: "k1"}
+
+    changeset = Slot.changeset(%Slot{}, attrs)
+    refute changeset.valid?
+    assert "must be in the future" in errors_on(changeset).scheduled_at
+  end
 end

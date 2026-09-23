@@ -51,15 +51,15 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
   # Browser & Dashboard Routes
   # ===================================================================
   scope "/", FlyrankCapstoneSocialStudioWeb do
-  pipe_through :browser
-  # Route root directly to ContentLive.Index
-  live "/", ContentLive.Index, :index
-  live "/posts", ContentLive.Index, :index
-  live "/posts/:id", PostLive.Show, :show
-  live "/analytics", AnalyticsLive.Index, :index
-  #Live_dashboard route for system monitoring
-  live_dashboard "/dashboard", metrics: FlyrankCapstoneSocialStudioWeb.Telemetry
-end
+    pipe_through :browser
+    # Route root directly to ContentLive.Index
+    live "/", ContentLive.Index, :index
+    live "/posts", ContentLive.Index, :index
+    live "/posts/:id", PostLive.Show, :show
+    live "/analytics", AnalyticsLive.Index, :index
+    # Live_dashboard route for system monitoring
+    live_dashboard "/dashboard", metrics: FlyrankCapstoneSocialStudioWeb.Telemetry
+  end
 
   if Application.compile_env(:flyrank_capstone_social_studio, :dev_routes) do
     scope "/dev" do

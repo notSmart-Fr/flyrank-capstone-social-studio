@@ -67,7 +67,7 @@ defmodule FlyrankCapstoneSocialStudio.ReviewWorkflowTest do
     end
   end
 
- describe "Phase 3 Gate: HTTP 4xx API Enforcement" do
+  describe "Phase 3 Gate: HTTP 4xx API Enforcement" do
     setup do
       {:ok, post} =
         Content.create_post(%{

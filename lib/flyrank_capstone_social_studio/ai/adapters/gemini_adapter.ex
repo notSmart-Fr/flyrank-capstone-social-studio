@@ -51,7 +51,13 @@ defmodule FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter do
     }
 
     case Req.post(url, json: payload) do
-      {:ok, %{status: 200, body: %{"candidates" => [%{"content" => %{"parts" => [%{"text" => json_text} | _]}} | _]} = body}} ->
+      {:ok,
+       %{
+         status: 200,
+         body:
+           %{"candidates" => [%{"content" => %{"parts" => [%{"text" => json_text} | _]}} | _]} =
+               body
+       }} ->
         case Jason.decode(json_text) do
           {:ok, %{"variant_a" => a, "variant_b" => b}} ->
             usage = Map.get(body, "usageMetadata", %{})
@@ -59,7 +65,8 @@ defmodule FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter do
             completion_tokens = Map.get(usage, "candidatesTokenCount", 0)
             total_tokens = Map.get(usage, "totalTokenCount", prompt_tokens + completion_tokens)
 
-            cost_float = (prompt_tokens * @input_rate_per_token) + (completion_tokens * @output_rate_per_token)
+            cost_float =
+              prompt_tokens * @input_rate_per_token + completion_tokens * @output_rate_per_token
 
             {:ok,
              %{

@@ -1,10 +1,7 @@
 defmodule FlyrankCapstoneSocialStudioWeb.PostController do
   use FlyrankCapstoneSocialStudioWeb, :controller
 
-
   alias FlyrankCapstoneSocialStudio.Content
-
-
 
   def create(conn, %{"post" => post_params} = params) do
     platforms = Map.get(params, "platforms", ["telegram", "mock_x", "mock_linkedin"])

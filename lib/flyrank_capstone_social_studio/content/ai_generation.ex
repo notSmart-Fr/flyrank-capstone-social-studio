@@ -17,7 +17,15 @@ defmodule FlyrankCapstoneSocialStudio.Content.AiGeneration do
 
   def changeset(ai_generation, attrs) do
     ai_generation
-    |> cast(attrs, [:post_id, :platform, :model_used, :prompt_tokens, :completion_tokens, :total_tokens, :cost])
+    |> cast(attrs, [
+      :post_id,
+      :platform,
+      :model_used,
+      :prompt_tokens,
+      :completion_tokens,
+      :total_tokens,
+      :cost
+    ])
     |> validate_required([:post_id, :platform])
   end
 end

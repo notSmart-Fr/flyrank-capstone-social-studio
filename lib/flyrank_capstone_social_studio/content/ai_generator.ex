@@ -4,11 +4,12 @@ defmodule FlyrankCapstoneSocialStudio.Content.AiGenerator do
   """
 
   def generate_ab_variants(content, platform_name, profile) do
-    adapter = Application.get_env(
-      :flyrank_capstone_social_studio,
-      :ai_adapter,
-      FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter
-    )
+    adapter =
+      Application.get_env(
+        :flyrank_capstone_social_studio,
+        :ai_adapter,
+        FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter
+      )
 
     adapter.generate_ab_variants(content, platform_name, profile)
   end

@@ -1,11 +1,11 @@
 <div class="space-y-8">
-
   <!-- ================================================================= -->
   <!-- SECTION 1: ANALYTICS PAGE HEADER                                  -->
   <!-- ================================================================= -->
   <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
     <div>
       <.h2 class="text-gray-900 dark:text-white font-bold">System Analytics & Cost Tracking</.h2>
+      
       <.p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
         Monitor real-time AI generation costs, ingestion throughput, and system health metrics.
       </.p>
@@ -15,13 +15,11 @@
       ● Real-Time Metrics Active
     </.badge>
   </header>
-
   <!-- ================================================================= -->
   <!-- SECTION 2: METRIC CARDS OVERVIEW GRID                             -->
   <!-- ================================================================= -->
   <section aria-labelledby="metrics-summary-heading" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
     <h3 id="metrics-summary-heading" class="sr-only">Summary Metrics</h3>
-
     <!-- Metric Card 1: Total Posts Ingested -->
     <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
       <.card_content class="p-5">
@@ -29,13 +27,14 @@
           <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Total Ingestions</span>
           <.icon name="hero-document-text-micro" class="w-5 h-5 text-primary-600" />
         </div>
+        
         <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
           {@total_posts}
         </div>
+        
         <p class="text-xs text-gray-400 mt-1">Raw posts transformed into variants</p>
       </.card_content>
     </.card>
-
     <!-- Metric Card 2: Accumulated AI Cost -->
     <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
       <.card_content class="p-5">
@@ -43,13 +42,14 @@
           <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Accumulated AI Cost</span>
           <.icon name="hero-currency-dollar-micro" class="w-5 h-5 text-success-600" />
         </div>
+        
         <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
           ${Decimal.to_string(@total_cost, :normal)}
         </div>
+        
         <p class="text-xs text-gray-400 mt-1">Exact cost using Decimal precision</p>
       </.card_content>
     </.card>
-
     <!-- Metric Card 3: System Status & API Health -->
     <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
       <.card_content class="p-5">
@@ -57,14 +57,15 @@
           <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Grounding Status</span>
           <.icon name="hero-shield-check-micro" class="w-5 h-5 text-info-600" />
         </div>
+        
         <div class="mt-2 text-2xl font-bold text-gray-900 dark:text-white">
           100%
         </div>
+        
         <p class="text-xs text-gray-400 mt-1">Verified against source content</p>
       </.card_content>
     </.card>
   </section>
-
   <!-- ================================================================= -->
   <!-- SECTION 3: RECENT ACTIVITY COST BREAKDOWN TABLE                   -->
   <!-- ================================================================= -->
@@ -72,17 +73,21 @@
     <.h3 id="cost-breakdown-heading" class="text-gray-900 dark:text-white font-semibold">
       Ingestion Cost Ledger
     </.h3>
-
+    
     <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 overflow-hidden">
       <.table class="w-full text-left text-sm">
         <thead class="bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400 uppercase">
           <tr>
             <th scope="col" class="px-6 py-3">Post Title</th>
+            
             <th scope="col" class="px-6 py-3">Type</th>
+            
             <th scope="col" class="px-6 py-3">Content Hash</th>
+            
             <th scope="col" class="px-6 py-3 text-right">Generation Cost</th>
           </tr>
         </thead>
+        
         <tbody class="divide-y divide-gray-200 dark:divide-gray-800 text-gray-700 dark:text-gray-300">
           <%= if Enum.empty?(@posts) do %>
             <tr>
@@ -98,12 +103,15 @@
                     {post.title}
                   </.link>
                 </td>
+                
                 <td class="px-6 py-4">
                   <.badge color="info" variant="outline" label={post.source_type} />
                 </td>
+                
                 <td class="px-6 py-4 font-mono text-xs text-gray-400">
                   {String.slice(post.content_hash || "n/a", 0, 10)}...
                 </td>
+                
                 <td class="px-6 py-4 text-right font-mono text-xs font-semibold text-gray-900 dark:text-white">
                   ${Decimal.to_string(post.total_ai_cost || Decimal.new("0.00"), :normal)}
                 </td>
@@ -114,5 +122,4 @@
       </.table>
     </.card>
   </section>
-
 </div>

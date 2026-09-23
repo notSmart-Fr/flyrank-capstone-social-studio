@@ -91,7 +91,7 @@ defmodule FlyrankCapstoneSocialStudioWeb do
       # Common modules used in templates
       alias Phoenix.LiveView.JS
       alias FlyrankCapstoneSocialStudioWeb.Layouts
-      #import Petal Components
+      # import Petal Components
       import PetalComponents
 
       # Routes generation with the ~p sigil

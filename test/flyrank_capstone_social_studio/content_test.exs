@@ -49,7 +49,8 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
     test "ingest_and_generate/2 creates valid A/B variants and tracks AI costs" do
       post_params = %{
         "title" => "Understanding Idempotency in Elixir",
-        "content" => "Idempotency ensures that retrying an operation produces the exact same result.",
+        "content" =>
+          "Idempotency ensures that retrying an operation produces the exact same result.",
         "source_type" => "markdown"
       }
 
@@ -71,11 +72,20 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
       assert Enum.all?(variants, &(&1.prompt_tokens >= 0))
       assert Enum.all?(variants, &(&1.completion_tokens >= 0))
       assert Enum.all?(variants, &(&1.total_tokens >= 0))
-      assert Enum.all?(variants, &(Decimal.compare(&1.generation_cost, Decimal.new("0.0")) != :lt))
+
+      assert Enum.all?(
+               variants,
+               &(Decimal.compare(&1.generation_cost, Decimal.new("0.0")) != :lt)
+             )
 
       # Assert parent Post has accumulated the summed generation cost
       assert post.total_ai_cost != nil
-      assert Enum.all?(variants, &(&1.generation_cost != nil and Decimal.compare(&1.generation_cost, Decimal.new("0.0")) != :lt))
+
+      assert Enum.all?(
+               variants,
+               &(&1.generation_cost != nil and
+                   Decimal.compare(&1.generation_cost, Decimal.new("0.0")) != :lt)
+             )
     end
 
     test "variant changeset blocks rule-breaking content with explicit error messages naming the rules" do
@@ -126,6 +136,7 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
       end
     end
   end
+
   # 4. Content Hash Deduplication
   describe "ingest_and_generate/2 deduplication" do
     test "returns existing post and variants when duplicate content is ingested within 5 minutes" do

@@ -10,7 +10,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.PublishAttempt do
     field :error_message, :string
     belongs_to :slot, FlyrankCapstoneSocialStudio.Publishing.Slot
 
-
     timestamps(type: :utc_datetime)
   end
 

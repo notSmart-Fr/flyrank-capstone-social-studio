@@ -19,7 +19,6 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
     field :generation_cost, :decimal, default: Decimal.new("0.0")
     field :model_used, :string
 
-
     belongs_to :post, FlyrankCapstoneSocialStudio.Content.Post
     has_many :slots, FlyrankCapstoneSocialStudio.Publishing.Slot
 

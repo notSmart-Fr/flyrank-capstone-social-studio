@@ -35,10 +35,17 @@ defmodule FlyrankCapstoneSocialStudio.Content.GroundingVerifier do
         generationConfig: %{response_mime_type: "application/json"}
       }
 
-      url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=#{api_key}"
+      url =
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=#{api_key}"
 
       case Req.post(url, json: payload) do
-        {:ok, %{status: 200, body: %{"candidates" => [%{"content" => %{"parts" => [%{"text" => json_text} | _]}} | _]}}} ->
+        {:ok,
+         %{
+           status: 200,
+           body: %{
+             "candidates" => [%{"content" => %{"parts" => [%{"text" => json_text} | _]}} | _]
+           }
+         }} ->
           case Jason.decode(json_text) do
             {:ok, %{"is_grounded" => true}} ->
               {:ok, :grounded}
@@ -55,12 +62,12 @@ defmodule FlyrankCapstoneSocialStudio.Content.GroundingVerifier do
           {:ok, :grounded}
       end
     else
-  # Offline / test execution fallback
-  if String.contains?(variant_text, "99.9%") or String.contains?(variant_text, "fake_stat") do
-    {:error, :hallucination_detected, ["Planted fake statistic detected: 99.9%"]}
-  else
-    {:ok, :grounded}
-  end
-end
+      # Offline / test execution fallback
+      if String.contains?(variant_text, "99.9%") or String.contains?(variant_text, "fake_stat") do
+        {:error, :hallucination_detected, ["Planted fake statistic detected: 99.9%"]}
+      else
+        {:ok, :grounded}
+      end
+    end
   end
 end

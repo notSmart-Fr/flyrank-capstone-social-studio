@@ -1,11 +1,8 @@
 defmodule FlyrankCapstoneSocialStudioWeb.CampaignController do
   use FlyrankCapstoneSocialStudioWeb, :controller
 
-
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
-
-
 
   def show(conn, %{"id" => id}) do
     case Content.get_campaign_details(id) do

@@ -18,26 +18,26 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
     {:ok, %{status: :already_published}}
   end
 
- def dispatch_slot(%Slot{} = slot, opts) do
-  # Look up existing successful publish attempt for this slot
-  existing_successful =
-    from(pa in PublishAttempt,
-      where: pa.slot_id == ^slot.id and pa.status == "success"
-    )
-    |> Repo.one()
+  def dispatch_slot(%Slot{} = slot, opts) do
+    # Look up existing successful publish attempt for this slot
+    existing_successful =
+      from(pa in PublishAttempt,
+        where: pa.slot_id == ^slot.id and pa.status == "success"
+      )
+      |> Repo.one()
 
-  cond do
-    existing_successful ->
-      {:ok, existing_successful}
+    cond do
+      existing_successful ->
+        {:ok, existing_successful}
 
-    slot.status == "published" ->
-      # Fallback if slot is marked published but attempt wasn't pre-loaded
-      {:ok, Repo.get_by(PublishAttempt, slot_id: slot.id, status: "success")}
+      slot.status == "published" ->
+        # Fallback if slot is marked published but attempt wasn't pre-loaded
+        {:ok, Repo.get_by(PublishAttempt, slot_id: slot.id, status: "success")}
 
-    true ->
-      execute_dispatch(slot, opts)
+      true ->
+        execute_dispatch(slot, opts)
+    end
   end
-end
 
   defp execute_dispatch(%Slot{} = slot, opts) do
     # Preload variant to get content and platform

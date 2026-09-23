@@ -34,7 +34,8 @@ defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
      |> assign(:source_type, source_type)
      |> assign(:changeset, changeset)}
   end
-@impl true
+
+  @impl true
   def handle_event("delete_post", %{"id" => id}, socket) do
     post = Content.get_post!(id)
 
@@ -46,13 +47,15 @@ defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
         {:noreply,
          socket
          |> assign(:posts_count, new_count)
-         |> stream_delete(:posts, post) # 👈 Instantly removes post from DOM stream
+         # 👈 Instantly removes post from DOM stream
+         |> stream_delete(:posts, post)
          |> put_flash(:info, "Post deleted successfully.")}
 
       {:error, _reason} ->
         {:noreply, put_flash(socket, :error, "Failed to delete post.")}
     end
   end
+
   # Event 2: Ingests post & creates local ConstraintProfile template drafts
   @impl true
   def handle_event("save_post", %{"post" => post_params} = params, socket) do

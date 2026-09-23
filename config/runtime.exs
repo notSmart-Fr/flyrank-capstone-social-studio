@@ -21,8 +21,8 @@ if System.get_env("PHX_SERVER") do
 end
 
 config :flyrank_capstone_social_studio,
-  :gemini_api_key,
-  System.get_env("GEMINI_API_KEY")
+       :gemini_api_key,
+       System.get_env("GEMINI_API_KEY")
 
 config :flyrank_capstone_social_studio, FlyrankCapstoneSocialStudioWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]

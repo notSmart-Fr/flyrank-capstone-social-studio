@@ -1,11 +1,8 @@
 defmodule FlyrankCapstoneSocialStudioWeb.VariantController do
   use FlyrankCapstoneSocialStudioWeb, :controller
 
-
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
-
-
 
   def update(conn, %{"id" => id, "variant" => variant_params}) do
     variant = Content.get_variant!(id)
