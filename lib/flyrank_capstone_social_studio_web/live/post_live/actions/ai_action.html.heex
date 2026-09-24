@@ -1,0 +1,57 @@
+<%= if @show && @ai_candidates do %>
+  <div class="fixed inset-0 z-50 flex items-start justify-center bg-gray-900/60 backdrop-blur-sm p-4 py-8 sm:py-12 overflow-y-auto">
+    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 my-auto">
+      <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-4">
+        <div class="flex items-center gap-2">
+          <.icon name="hero-sparkles-micro" class="w-5 h-5 text-primary-600" />
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+            Select Preferred AI Variant ({String.upcase(@active_tab)})
+          </h3>
+        </div>
+        
+        <button
+          type="button"
+          phx-click="close_ab_modal"
+          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm font-semibold"
+        >
+          Close
+        </button>
+      </div>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <%= for {label, key, badge_cls, choice} <- [
+              {"Variant A", :a, "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300", "A"},
+              {"Variant B", :b, "bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300", "B"}
+            ] do %>
+          <% candidate = Map.get(@ai_candidates, key) %>
+          <div class="border border-gray-200 dark:border-gray-800 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/40 hover:border-primary-500 transition-all flex flex-col justify-between space-y-4">
+            <div>
+              <div class="flex items-center justify-between mb-3">
+                <span class={["px-2.5 py-1 text-xs font-semibold rounded-md", badge_cls]}>
+                  {label}
+                </span>
+                
+                <span class="text-xs text-gray-400 font-mono">
+                  Model: {candidate.model_used}
+                </span>
+              </div>
+              
+              <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 min-h-35">
+                {candidate.content}
+              </p>
+            </div>
+            
+            <button
+              type="button"
+              phx-click="select_ab_choice"
+              phx-value-choice={choice}
+              class="w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+            >
+              <.icon name="hero-check-micro" class="w-4 h-4" /> Use {label}
+            </button>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </div>
+<% end %>

@@ -1,0 +1,97 @@
+<!-- Main Trigger Button -->
+<.button
+  type="button"
+  phx-click="open_publish_modal"
+  phx-value-id={@variant.id}
+  color="primary"
+  variant="solid"
+  size="sm"
+  class="cursor-pointer"
+>
+  <.icon name="hero-paper-airplane-micro" class="w-4 h-4 mr-1" />
+  Post to {String.upcase(@active_tab)}
+</.button>
+
+<!-- Interactive Scheduling Modal -->
+<%= if @show_schedule_modal do %>
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150">
+      <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+        <h3 class="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <.icon name="hero-clock-micro" class="w-5 h-5 text-primary-600" />
+          Publish to {String.upcase(@active_tab)}
+        </h3>
+        <button
+          type="button"
+          phx-click="close_schedule_modal"
+          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm font-bold cursor-pointer"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- Option 1: Auto / Immediate Dispatch -->
+      <div class="p-4 border border-gray-200 dark:border-gray-800 rounded-xl hover:border-primary-500 transition-all bg-gray-50/50 dark:bg-gray-800/30 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+            ⚡ Instant / Auto Dispatch
+          </span>
+          <.badge color="success" variant="soft" class="text-[10px]">Immediate</.badge>
+        </div>
+        <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+          Publishes this post immediately to your connected {String.upcase(@active_tab)} account.
+        </p>
+        <.button
+          type="button"
+          phx-click="confirm_publish"
+          phx-value-mode="now"
+          color="primary"
+          variant="solid"
+          size="xs"
+          class="w-full mt-2 cursor-pointer"
+        >
+          Post Now
+        </.button>
+      </div>
+
+      <!-- Option 2: Pick Custom Schedule -->
+      <form
+        phx-submit="confirm_publish"
+        class="p-4 border border-gray-200 dark:border-gray-800 rounded-xl hover:border-primary-500 transition-all bg-gray-50/50 dark:bg-gray-800/30 space-y-3"
+      >
+        <input type="hidden" name="mode" value="scheduled" />
+
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+            📅 Custom Schedule
+          </span>
+          <.badge color="info" variant="soft" class="text-[10px]">Queue</.badge>
+        </div>
+
+        <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+          Pick a specific date and time for automatic background dispatch.
+        </p>
+
+        <div class="space-y-1">
+          <label class="text-[11px] font-semibold text-gray-600 dark:text-gray-400">Scheduled Date & Time</label>
+          <input
+            type="datetime-local"
+            name="scheduled_at"
+            required
+            class="w-full p-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 focus:ring-primary-500"
+          />
+        </div>
+
+        <.button
+          type="submit"
+          color="gray"
+          variant="outline"
+          size="xs"
+          class="w-full cursor-pointer"
+        >
+          Schedule Post
+        </.button>
+      </form>
+    </div>
+  </div>
+<% end %>

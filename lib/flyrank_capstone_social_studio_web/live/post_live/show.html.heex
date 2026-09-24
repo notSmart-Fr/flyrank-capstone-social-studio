@@ -1,47 +1,8 @@
 <div class="space-y-6">
-  <!-- ================================================================= -->
-  <!-- SECTION 1: BREADCRUMBS & TOP NAVIGATION                           -->
-  <!-- ================================================================= -->
-  <nav
-    aria-label="Breadcrumb"
-    class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400"
-  >
-    <.link navigate={~p"/posts"} class="hover:text-primary-600 dark:hover:text-primary-400">
-      Dashboard
-    </.link>
-    <span>/</span>
-    <.link navigate={~p"/posts"} class="hover:text-primary-600 dark:hover:text-primary-400">
-      Posts
-    </.link>
-    <span>/</span>
-    <span class="text-gray-900 dark:text-white font-medium truncate max-w-xs">
-      {@post.title}
-    </span>
-  </nav>
-  <!-- ================================================================= -->
-  <!-- SECTION 2: INSPECTOR PAGE HEADER                                  -->
-  <!-- ================================================================= -->
-  <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
-    <div>
-      <.h2 class="text-gray-900 dark:text-white font-bold text-2xl">{@post.title}</.h2>
+  <!-- SECTION 1 & 2: HEADER SLICE -->
+  <FlyrankCapstoneSocialStudioWeb.PostLive.Components.InspectorHeader.render post={@post} />
 
-      <div class="flex items-center gap-3 mt-2 text-xs text-gray-500 dark:text-gray-400">
-        <.badge color="info" variant="outline" label={@post.source_type} />
-        <span>Inserted: {Calendar.strftime(@post.inserted_at, "%Y-%m-%d %H:%M UTC")}</span>
-      </div>
-    </div>
-
-    <div>
-      <.link navigate={~p"/posts"}>
-        <.button color="gray" variant="outline" size="sm">
-          <.icon name="hero-arrow-left-micro" class="w-4 h-4 mr-1" /> Back to Dashboard
-        </.button>
-      </.link>
-    </div>
-  </header>
-  <!-- ================================================================= -->
-  <!-- SECTION 3: SPLIT INSPECTION LAYOUT (SOURCE VS VARIANTS)          -->
-  <!-- ================================================================= -->
+  <!-- SECTION 3: SPLIT INSPECTION LAYOUT -->
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
     <!-- LEFT PANE: ORIGINAL SOURCE CONTENT -->
     <section aria-labelledby="source-heading" class="lg:col-span-5 space-y-3">
@@ -61,7 +22,8 @@
         </.card_content>
       </.card>
     </section>
-    <!-- RIGHT PANE: GENERATED PLATFORM VARIANTS & EDITOR -->
+
+    <!-- RIGHT PANE: VARIANT EDITOR SLICE -->
     <section aria-labelledby="variants-heading" class="lg:col-span-7 space-y-3">
       <.h3
         id="variants-heading"
@@ -71,324 +33,22 @@
         Social Variants & Editor
       </.h3>
 
-      <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800">
-        <.card_content class="p-5 space-y-4">
-          <!-- Platform Selector Tabs -->
-          <div class="flex border-b border-gray-200 dark:border-gray-800 gap-4">
-            <button
-              type="button"
-              phx-click="select_tab"
-              phx-value-tab="telegram"
-              class={[
-                "py-2 px-1 border-b-2 text-sm font-medium transition-colors flex items-center gap-2",
-                if(@active_tab == "telegram",
-                  do: "border-primary-600 text-primary-600 dark:text-primary-400",
-                  else: "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                )
-              ]}
-            >
-              Telegram
-            </button>
-
-            <button
-              type="button"
-              phx-click="select_tab"
-              phx-value-tab="mock_x"
-              class={[
-                "py-2 px-1 border-b-2 text-sm font-medium transition-colors flex items-center gap-2",
-                if(@active_tab in ["x", "mock_x"],
-                  do: "border-primary-600 text-primary-600 dark:text-primary-400",
-                  else: "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                )
-              ]}
-            >
-              X / Twitter
-            </button>
-
-            <button
-              type="button"
-              phx-click="select_tab"
-              phx-value-tab="mock_linkedin"
-              class={[
-                "py-2 px-1 border-b-2 text-sm font-medium transition-colors flex items-center gap-2",
-                if(@active_tab == "mock_linkedin",
-                  do: "border-primary-600 text-primary-600 dark:text-primary-400",
-                  else: "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                )
-              ]}
-            >
-              LinkedIn
-            </button>
-          </div>
-          <!-- Active Variant Card Preview & Editable Area -->
-          <%= if @current_variant do %>
-            <div class="space-y-4 pt-1">
-              <!-- Variant Header Bar & Source Indicator -->
-              <div class="flex items-center justify-between pb-2 border-b border-gray-100 dark:border-gray-800">
-                <div class="flex items-center gap-2">
-                  <%= if (@current_variant.model_used || "Local Constraint Template") == "Local Constraint Template" do %>
-                    <.badge color="gray" variant="soft" class="text-xs">
-                      📌 Rule-Based Template
-                    </.badge>
-                  <% else %>
-                    <.badge color="success" variant="soft" class="text-xs">
-                      ✨ Grounded AI Draft
-                    </.badge>
-                  <% end %>
-
-                  <span class="text-xs text-gray-400">
-                    Model: {@current_variant.model_used || "Local Constraint Template"}
-                  </span>
-                </div>
-                <!-- On-Demand Gemini AI Enhancement Trigger / Spinner -->
-                <%= if @generating do %>
-                  <div class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 dark:bg-primary-950/50 dark:text-primary-300 rounded-lg border border-primary-200 dark:border-primary-800 animate-pulse">
-                    <.icon
-                      name="hero-arrow-path-micro"
-                      class="w-4 h-4 animate-spin text-primary-600"
-                    /> <span>Generating AI Variants...</span>
-                  </div>
-                <% else %>
-                  <.button
-                    type="button"
-                    phx-click="generate_platform_variant"
-                    phx-value-platform={@active_tab}
-                    color="primary"
-                    variant="outline"
-                    size="xs"
-                    class="group cursor-pointer transition-all duration-200 hover:shadow-sm hover:border-primary-600"
-                  >
-                    <.icon
-                      name="hero-sparkles-micro"
-                      class="w-4 h-4 mr-1 text-primary-600 transition-transform duration-200 group-hover:scale-125 group-hover:rotate-12"
-                    /> {if @canonical_selected, do: "Regenerate with AI", else: "Generate with AI"}
-                  </.button>
-                <% end %>
-              </div>
-              <!-- A/B Variant Sub-Tab Pills (Hidden when a canonical draft is active) -->
-              <% platform_variants =
-                Enum.filter(@post.variants, &(&1.platform == @current_variant.platform)) %>
-              <%= if length(platform_variants) > 1 and not @canonical_selected do %>
-                <div class="flex items-center gap-2 bg-gray-50 dark:bg-gray-950 p-1.5 rounded-lg border border-gray-200 dark:border-gray-800 w-fit">
-                  <%= for variant <- platform_variants do %>
-                    <button
-                      type="button"
-                      phx-click="select_variant"
-                      phx-value-variant_id={variant.id}
-                      class={[
-                        "px-3 py-1 text-xs font-semibold rounded-md transition-colors flex items-center gap-1.5",
-                        if(@current_variant.id == variant.id,
-                          do:
-                            "bg-white dark:bg-gray-800 text-primary-600 dark:text-primary-400 shadow-sm",
-                          else: "text-gray-500 hover:text-gray-700 dark:text-gray-400"
-                        )
-                      ]}
-                    >
-                      Variant {variant.variant_label || "Draft"}
-                      <.badge
-                        color={if(variant.status == "approved", do: "success", else: "gray")}
-                        variant="soft"
-                        class="text-[10px] px-1 py-0"
-                      >
-                        {variant.status}
-                      </.badge>
-                    </button>
-                  <% end %>
-                </div>
-              <% end %>
-              <!-- Rejection Reason Alert (If Grounding Failed or User Rejected) -->
-              <%= if @current_variant.status == "rejected" do %>
-                <div class="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-                  <.icon name="hero-exclamation-triangle-micro" class="w-4 h-4 mt-0.5 shrink-0" />
-                  <div>
-                    <span class="font-semibold">Variant Rejected:</span> {@current_variant.rejection_reason ||
-                      "Marked as rejected by reviewer."}
-                  </div>
-                </div>
-              <% end %>
-              <!-- Editable Variant Form -->
-              <form phx-submit="save_variant" class="space-y-3">
-                <input type="hidden" name="variant_id" value={Map.get(@current_variant, :id)} />
-                <div class="relative">
-                  <textarea
-                    id="variant-edit-textarea"
-                    name="content"
-                    rows={8}
-                    class="w-full p-4 rounded-lg bg-gray-50 dark:bg-gray-950 border border-gray-200 dark:border-gray-800 text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-sans focus:ring-primary-500 focus:border-primary-500"
-                  >{@current_variant.content}</textarea>
-                  <!-- Quick Copy Button inside textarea corner -->
-                  <button
-                    type="button"
-                    onclick="navigator.clipboard.writeText(document.getElementById('variant-edit-textarea').value)"
-                    class="absolute top-3 right-3 px-2 py-1 text-xs bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-1 shadow-sm"
-                  >
-                    <.icon name="hero-clipboard-document-micro" class="w-3.5 h-3.5" /> Copy
-                  </button>
-                </div>
-                <!-- Action Toolbar: Save, Reject, Publish -->
-                <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
-                  <div class="flex gap-2">
-                    <.button type="submit" color="gray" variant="outline" size="xs">
-                      <.icon name="hero-check-micro" class="w-4 h-4 mr-1" /> Save Edits
-                    </.button>
-
-                    <%= if Map.get(@current_variant, :id) do %>
-                      <button
-                        type="button"
-                        phx-click="reject_variant"
-                        phx-value-id={@current_variant.id}
-                        class="text-xs font-medium text-red-600 hover:underline"
-                      >
-                        Reject
-                      </button>
-
-                      <button
-                        type="button"
-                        phx-click="publish_platform"
-                        phx-value-id={@current_variant.id}
-                        class="text-xs font-medium text-green-600 hover:underline"
-                      >
-                        Publish
-                      </button>
-                    <% else %>
-                      <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md">
-                        <.icon name="hero-sparkles-micro" class="w-3.5 h-3.5 text-amber-500" />
-                        Unsaved AI Draft — Click 'Save Edits' to persist
-                      </span>
-                    <% end %>
-                  </div>
-
-                  <%= if Map.get(@current_variant, :id) do %>
-                    <.button
-                      type="button"
-                      phx-click="publish_platform"
-                      phx-value-id={@current_variant.id}
-                      color="primary"
-                      variant="solid"
-                      size="sm"
-                    >
-                      <.icon name="hero-paper-airplane-micro" class="w-4 h-4 mr-1" />
-                      Post to {@active_tab |> String.upcase()}
-                    </.button>
-                  <% else %>
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md">
-                      <.icon name="hero-sparkles-micro" class="w-3.5 h-3.5 text-amber-500" />
-                      Draft Preview
-                    </span>
-                  <% end %>
-                </div>
-              </form>
-            </div>
-          <% else %>
-            <!-- Fallback if no variant exists for active platform tab -->
-            <div class="p-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-950 rounded-lg border border-dashed border-gray-200 dark:border-gray-800 space-y-3">
-              <p class="text-sm font-medium">No variant generated for {@active_tab} yet.</p>
-
-              <%= if @generating do %>
-                <div class="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-primary-700 bg-primary-50 dark:bg-primary-950/50 dark:text-primary-300 rounded-lg border border-primary-200 dark:border-primary-800 animate-pulse">
-                  <.icon
-                    name="hero-arrow-path-micro"
-                    class="w-4 h-4 animate-spin text-primary-600"
-                  />
-                  <span>Generating AI Variants...</span>
-                </div>
-              <% else %>
-                <.button
-                  type="button"
-                  phx-click="generate_platform_variant"
-                  phx-value-platform={@active_tab}
-                  color="primary"
-                  variant="outline"
-                  size="xs"
-                >
-                  <.icon name="hero-sparkles-micro" class="w-4 h-4 mr-1" /> Generate with Gemini
-                </.button>
-              <% end %>
-            </div>
-          <% end %>
-        </.card_content>
-      </.card>
+      <FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction.variant_action
+        post={@post}
+        current_variant={@current_variant}
+        active_tab={@active_tab}
+        generating={@generating}
+        canonical_selected={@canonical_selected}
+        show_schedule_modal={@show_schedule_modal}
+        publishing_variant_id={@publishing_variant_id}
+      />
     </section>
   </div>
+
+  <!-- A/B SELECTION MODAL SLICE -->
+  <FlyrankCapstoneSocialStudioWeb.PostLive.Actions.AiAction.ai_action
+    show={@show_ab_modal}
+    ai_candidates={@ai_candidates}
+    active_tab={@active_tab}
+  />
 </div>
-<!-- ================================================================= -->
-<!-- A/B VARIANT SELECTION MODAL                                         -->
-<!-- ================================================================= -->
-<%= if @show_ab_modal && @ai_candidates do %>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-    <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl shadow-2xl max-w-4xl w-full p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150">
-      <div class="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-4">
-        <div class="flex items-center gap-2">
-          <.icon name="hero-sparkles-micro" class="w-5 h-5 text-primary-600" />
-          <h3 class="text-lg font-bold text-gray-900 dark:text-white">
-            Select Preferred AI Variant ({String.upcase(@active_tab)})
-          </h3>
-        </div>
-
-        <button
-          type="button"
-          phx-click="close_ab_modal"
-          class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm font-semibold"
-        >
-          ✕ Close
-        </button>
-      </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div class="border border-gray-200 dark:border-gray-800 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/40 hover:border-primary-500 dark:hover:border-primary-500 transition-all flex flex-col justify-between space-y-4">
-          <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="px-2.5 py-1 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300 rounded-md">
-                Variant A
-              </span>
-
-              <span class="text-xs text-gray-400 font-mono">
-                Model: {@ai_candidates.a.model_used}
-              </span>
-            </div>
-
-            <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 min-h-35">
-              {@ai_candidates.a.content}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            phx-click="select_ab_choice"
-            phx-value-choice="A"
-            class="w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <.icon name="hero-check-micro" class="w-4 h-4" /> Use Variant A
-          </button>
-        </div>
-
-        <div class="border border-gray-200 dark:border-gray-800 rounded-xl p-5 bg-gray-50/50 dark:bg-gray-800/40 hover:border-primary-500 dark:hover:border-primary-500 transition-all flex flex-col justify-between space-y-4">
-          <div>
-            <div class="flex items-center justify-between mb-3">
-              <span class="px-2.5 py-1 text-xs font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 rounded-md">
-                Variant B
-              </span>
-
-              <span class="text-xs text-gray-400 font-mono">
-                Model: {@ai_candidates.b.model_used}
-              </span>
-            </div>
-
-            <p class="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-sans bg-white dark:bg-gray-900 p-3.5 rounded-lg border border-gray-200 dark:border-gray-800 min-h-35">
-              {@ai_candidates.b.content}
-            </p>
-          </div>
-
-          <button
-            type="button"
-            phx-click="select_ab_choice"
-            phx-value-choice="B"
-            class="w-full py-2.5 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-          >
-            <.icon name="hero-check-micro" class="w-4 h-4" /> Use Variant B
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-<% end %>

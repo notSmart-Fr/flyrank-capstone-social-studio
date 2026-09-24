@@ -12,11 +12,17 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
 
     if token && chat_id do
       url = "https://api.telegram.org/bot#{token}/sendMessage"
-      body = Jason.encode!(%{chat_id: chat_id, text: content})
-      headers = [{"content-type", "application/json"}]
 
-      case Req.post(url, body: body, headers: headers) do
-        {:ok, %{status: 200, body: %{"result" => %{"message_id" => msg_id}}}} ->
+      payload = %{
+        chat_id: chat_id,
+        text: content,
+        # Enables bold, italic, and links in Telegram
+        parse_mode: "Markdown"
+      }
+
+      # Req handles JSON encoding and content-type headers automatically via `json:`
+      case Req.post(url, json: payload) do
+        {:ok, %{status: 200, body: %{"ok" => true, "result" => %{"message_id" => msg_id}}}} ->
           {:ok, %{external_id: to_string(msg_id), raw_response: "Published to Telegram"}}
 
         {:ok, %{status: status, body: response_body}} ->
@@ -30,7 +36,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
       {:ok,
        %{
          external_id: "telegram-dryrun-#{:erlang.unique_integer([:positive])}",
-         raw_response: "Dry run mode"
+         raw_response: "Dry run mode (Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)"
        }}
     end
   end

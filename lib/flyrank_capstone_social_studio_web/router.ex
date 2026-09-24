@@ -1,7 +1,6 @@
 defmodule FlyrankCapstoneSocialStudioWeb.Router do
   use FlyrankCapstoneSocialStudioWeb, :router
   import Phoenix.LiveDashboard.Router
-
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session

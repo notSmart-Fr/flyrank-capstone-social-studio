@@ -30,6 +30,8 @@ services:
       PORT: 4000
       PHX_SERVER: "true"
       GEMINI_API_KEY: ${GEMINI_API_KEY}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
     depends_on:
       db:
         condition: service_healthy

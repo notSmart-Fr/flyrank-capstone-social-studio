@@ -44,54 +44,59 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   def schedule_variant(variant, attrs, opts \\ [])
 
   def schedule_variant(%Variant{status: "approved"} = variant, attrs, opts) do
-    mode = Keyword.get(opts, :mode, :manual)
-    scheduled_at = resolve_scheduled_at(mode, variant.platform, attrs)
+  mode = Keyword.get(opts, :mode, :manual)
+  scheduled_at = resolve_scheduled_at(mode, variant.platform, attrs)
 
-    string_attrs =
-      attrs
-      |> Map.new(fn {k, v} -> {to_string(k), v} end)
-      |> Map.put("variant_id", variant.id)
-      |> Map.put("scheduled_at", scheduled_at)
+  # 1. Resolve or generate an idempotency key fallback
+  raw_key = Map.get(attrs, :idempotency_key) || Map.get(attrs, "idempotency_key")
+  idempotency_key = raw_key || "slot_#{variant.id}_#{System.system_time(:microsecond)}"
 
-    idempotency_key = Map.get(string_attrs, "idempotency_key")
+  string_attrs =
+    attrs
+    |> Map.new(fn {k, v} -> {to_string(k), v} end)
+    |> Map.put("variant_id", variant.id)
+    |> Map.put("scheduled_at", scheduled_at)
+    |> Map.put("idempotency_key", idempotency_key) # 👈 Guarantees key presence
 
-    if idempotency_key do
-      case create_slot(string_attrs) do
-        {:ok, slot} ->
-          enqueue_publish_job(slot)
-          {:ok, slot}
+  # 2. If caller provided an explicit idempotency key, execute direct path
+  if raw_key do
+    case create_slot(string_attrs) do
+      {:ok, slot} ->
+        enqueue_publish_job(slot)
+        {:ok, slot}
 
-        {:error, changeset} ->
-          {:error, changeset}
-      end
-    else
-      Repo.transaction(fn ->
-        lock_variant_row(variant.id)
-
-        case get_latest_variant_slot(variant.id) do
-          %Slot{status: "failed"} = failed_slot ->
-            {:ok, retry_slot} =
-              update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
-
-            enqueue_publish_job(retry_slot)
-            retry_slot
-
-          nil ->
-            case create_slot(string_attrs) do
-              {:ok, slot} ->
-                enqueue_publish_job(slot)
-                slot
-
-              {:error, changeset} ->
-                Repo.rollback(changeset)
-            end
-
-          %Slot{} = existing_slot ->
-            existing_slot
-        end
-      end)
+      {:error, changeset} ->
+        {:error, changeset}
     end
+  else
+    # 3. Automatic fallback path: uses generated key in transaction
+    Repo.transaction(fn ->
+      lock_variant_row(variant.id)
+
+      case get_latest_variant_slot(variant.id) do
+        %Slot{status: "failed"} = failed_slot ->
+          {:ok, retry_slot} =
+            update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
+
+          enqueue_publish_job(retry_slot)
+          retry_slot
+
+        nil ->
+          case create_slot(string_attrs) do
+            {:ok, slot} ->
+              enqueue_publish_job(slot)
+              slot
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
+
+        %Slot{} = existing_slot ->
+          existing_slot
+      end
+    end)
   end
+end
 
   def schedule_variant(%Variant{}, _attrs, _opts) do
     {:error, :unapproved_variant}

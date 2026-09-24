@@ -5,7 +5,7 @@
   <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
     <div>
       <.h2 class="text-gray-900 dark:text-white font-bold text-2xl">Content Ingestion Studio</.h2>
-      
+
       <.p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
         Ingest Markdown or URLs to generate grounded, platform-tailored social posts.
       </.p>
@@ -40,7 +40,7 @@
             <.field_label for={f[:title].id} class="font-medium text-gray-700 dark:text-gray-300">
               Post Title
             </.field_label>
-            
+
             <.text_input
               form={f}
               field={:title}
@@ -58,7 +58,7 @@
               >
                 Source Type
               </.field_label>
-              
+
               <.select
                 form={f}
                 field={:source_type}
@@ -66,12 +66,12 @@
                 class="w-full mt-1 rounded-lg border! border-gray-300! dark:border-gray-700! bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary-500! focus:border-primary-500!"
               />
             </div>
-            
+
             <div>
               <.field_label class="font-medium text-gray-700 dark:text-gray-300">
                 Target Platforms
               </.field_label>
-              
+
               <div class="flex gap-6 items-center pt-3">
                 <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                   <input
@@ -82,7 +82,7 @@
                     class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   /> Telegram
                 </label>
-                
+
                 <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -92,7 +92,7 @@
                     class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
                   /> Mock X
                 </label>
-                
+
                 <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -117,7 +117,7 @@
                 Markdown Source Content
               <% end %>
             </.field_label>
-            
+
             <%= if @source_type == "url" do %>
               <.text_input
                 form={f}
@@ -136,7 +136,7 @@
                 class="w-full mt-1 rounded-lg border! border-gray-300! dark:border-gray-700! bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-primary-500! focus:border-primary-500!"
               />
             <% end %>
-             <.form_field_error field={f[:content]} />
+            <.form_field_error field={f[:content]} />
           </div>
           <!-- Submit Button -->
           <div class="flex justify-end pt-2">
@@ -164,13 +164,13 @@
     <.h3 id="recent-ingestions-title" class="text-gray-900 dark:text-white font-bold text-xl">
       Recent Ingestions
     </.h3>
-    
+
     <%= if @posts_count == 0 do %>
       <!-- Empty State View -->
       <.card class="p-8 text-center text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 border-2! border-dashed! border-gray-300! dark:border-gray-800! rounded-xl">
         <.icon name="hero-document-text-micro" class="w-10 h-10 mx-auto mb-2 text-gray-400" />
         <p class="font-medium">No posts ingested yet.</p>
-        
+
         <p class="text-xs mt-1">
           Submit content using the form above to start generating social media variants.
         </p>
@@ -186,7 +186,7 @@
                 <.h4 class="text-base font-semibold text-gray-900 dark:text-white line-clamp-1">
                   {post.title}
                 </.h4>
-                
+
                 <.badge
                   color="info"
                   variant="outline"
@@ -198,9 +198,8 @@
               <p class="text-xs text-gray-600 dark:text-gray-400 line-clamp-3 mb-4">
                 {post.content}
               </p>
-              
-              <footer class="flex items-center justify-between pt-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400">
-                <span>Hash: {String.slice(post.content_hash || "n/a", 0, 8)}</span>
+
+              <footer class="flex items-center justify-end pt-3 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-400">
                 <div class="flex items-center gap-3">
                   <.link
                     navigate={~p"/posts/#{post.id}"}
@@ -208,7 +207,7 @@
                   >
                     Inspect Variants →
                   </.link>
-                  
+
                   <button
                     type="button"
                     phx-click="delete_post"

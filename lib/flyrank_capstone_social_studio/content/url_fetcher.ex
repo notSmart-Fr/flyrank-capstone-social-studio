@@ -15,6 +15,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.UrlFetcher do
         {"accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"}
       ],
       follow_redirects: true,
+      max_redirects: 5,
       receive_timeout: 10_000
     ]
 

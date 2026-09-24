@@ -24,6 +24,14 @@ config :flyrank_capstone_social_studio,
        :gemini_api_key,
        System.get_env("GEMINI_API_KEY")
 
+config :flyrank_capstone_social_studio,
+       :telegram_bot_token,
+       System.get_env("TELEGRAM_BOT_TOKEN")
+
+config :flyrank_capstone_social_studio,
+       :telegram_chat_id,
+       System.get_env("TELEGRAM_CHAT_ID")
+
 config :flyrank_capstone_social_studio, FlyrankCapstoneSocialStudioWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 
