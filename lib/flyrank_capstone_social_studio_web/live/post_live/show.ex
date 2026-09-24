@@ -106,6 +106,11 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> put_flash(:error, "❌ Background publishing failed: #{error_msg}")}
   end
 
+  @impl true
+  def handle_info(:post_deleted, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/posts")}
+  end
+
   # ===========================================================================
   # Delegated Info Callbacks (PubSub / Oban)
   # ===========================================================================

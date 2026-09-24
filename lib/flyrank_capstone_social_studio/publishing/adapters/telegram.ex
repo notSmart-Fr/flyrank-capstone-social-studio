@@ -3,12 +3,17 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
 
   @doc """
   Publishes text to a Telegram channel via the Telegram Bot API.
-  If TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID are missing, falls back to a dry-run success.
   """
   @impl true
   def publish(content, opts \\ []) do
-    token = System.get_env("TELEGRAM_BOT_TOKEN")
-    chat_id = System.get_env("TELEGRAM_CHAT_ID") || Keyword.get(opts, :chat_id)
+    token =
+      System.get_env("TELEGRAM_BOT_TOKEN") ||
+        Application.get_env(:flyrank_capstone_social_studio, :telegram_bot_token)
+
+    chat_id =
+      Keyword.get(opts, :chat_id) ||
+        System.get_env("TELEGRAM_CHAT_ID") ||
+        Application.get_env(:flyrank_capstone_social_studio, :telegram_chat_id)
 
     if token && chat_id do
       url = "https://api.telegram.org/bot#{token}/sendMessage"
@@ -21,7 +26,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
       }
 
       # Req handles JSON encoding and content-type headers automatically via `json:`
-      case Req.post(url, json: payload) do
+      case Req.post(url, json: payload, finch: FlyrankCapstoneSocialStudio.Finch) do
         {:ok, %{status: 200, body: %{"ok" => true, "result" => %{"message_id" => msg_id}}}} ->
           {:ok, %{external_id: to_string(msg_id), raw_response: "Published to Telegram"}}
 
@@ -32,12 +37,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
           {:error, "Network failure: #{inspect(reason)}"}
       end
     else
-      # Dry-run mode for local dev / testing without live bot keys
-      {:ok,
-       %{
-         external_id: "telegram-dryrun-#{:erlang.unique_integer([:positive])}",
-         raw_response: "Dry run mode (Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID)"
-       }}
+      {:error, "Telegram credentials are missing: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required"}
     end
   end
 end

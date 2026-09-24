@@ -10,6 +10,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   alias FlyrankCapstoneSocialStudio.Content.Post
   alias FlyrankCapstoneSocialStudio.Content.UrlFetcher
   alias FlyrankCapstoneSocialStudio.Content.Variant
+  alias FlyrankCapstoneSocialStudio.Publishing.{PublishAttempt, Slot}
   alias FlyrankCapstoneSocialStudio.Repo
 
   # ===========================================================================
@@ -49,7 +50,20 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   """
   def delete_post(%Post{} = post) do
     Multi.new()
-    # 1. Delete associated variants
+    # Delete publishing records before their parent variants.
+    |> Multi.delete_all(:delete_publish_attempts, from(pa in PublishAttempt,
+      join: s in Slot,
+      on: s.id == pa.slot_id,
+      join: v in Variant,
+      on: v.id == s.variant_id,
+      where: v.post_id == ^post.id
+    ))
+    |> Multi.delete_all(:delete_slots, from(s in Slot,
+      join: v in Variant,
+      on: v.id == s.variant_id,
+      where: v.post_id == ^post.id
+    ))
+    # Delete associated variants
     |> Multi.delete_all(:delete_variants, Ecto.assoc(post, :variants))
     # 2. Delete associated AI generation logs (if ai_generations exists on Post)
     # |> Multi.delete_all(:delete_ai_generations, Ecto.assoc(post, :ai_generations))

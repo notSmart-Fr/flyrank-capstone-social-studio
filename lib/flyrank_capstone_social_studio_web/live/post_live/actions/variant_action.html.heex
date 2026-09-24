@@ -40,6 +40,21 @@
             <span class="text-xs text-gray-400">
               Model: {@current_variant.model_used || "Local Constraint Template"}
             </span>
+
+            <.badge
+              color={
+                case @current_variant.status do
+                  "published" -> "success"
+                  "approved" -> "info"
+                  "rejected" -> "danger"
+                  _ -> "gray"
+                end
+              }
+              variant="soft"
+              class="text-xs"
+            >
+              {String.capitalize(@current_variant.status || "draft")}
+            </.badge>
           </div>
 
           <%= if @generating do %>

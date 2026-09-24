@@ -13,7 +13,10 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker do
   def perform(%Oban.Job{args: %{"slot_id" => slot_id}}) do
     Logger.info("⚙️ [PUBLISH WORKER] Starting execution for slot_id: #{slot_id}")
 
-    slot = Publishing.get_slot!(slot_id)
+    slot =
+      slot_id
+      |> Publishing.get_slot!()
+      |> FlyrankCapstoneSocialStudio.Repo.preload(:variant)
 
     case Publishing.dispatch_slot(slot) do
       {:ok, _attempt} ->

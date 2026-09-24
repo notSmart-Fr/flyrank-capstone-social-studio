@@ -13,6 +13,7 @@ defmodule FlyrankCapstoneSocialStudio.Application do
       {DNSCluster,
        query: Application.get_env(:flyrank_capstone_social_studio, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: FlyrankCapstoneSocialStudio.PubSub},
+      {Finch, name: FlyrankCapstoneSocialStudio.Finch},
       # Start the background worker scheduler
       {Oban, Application.fetch_env!(:flyrank_capstone_social_studio, Oban)},
       # {FlyrankCapstoneSocialStudio.Worker, arg},

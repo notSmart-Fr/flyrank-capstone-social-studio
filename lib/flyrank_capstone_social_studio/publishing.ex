@@ -9,7 +9,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
 
   alias FlyrankCapstoneSocialStudio.Content.Variant
   alias FlyrankCapstoneSocialStudio.Publishing.PublishAttempt
-  alias FlyrankCapstoneSocialStudio.Publishing.Slot
+  alias FlyrankCapstoneSocialStudio.Publishing.{PublishAttempt, Slot}
   alias FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker
 
   # ===========================================================================
@@ -62,7 +62,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   if raw_key do
     case create_slot(string_attrs) do
       {:ok, slot} ->
-        enqueue_publish_job(slot)
+        maybe_enqueue_publish_job(slot, opts)
         {:ok, slot}
 
       {:error, changeset} ->
@@ -78,13 +78,13 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
           {:ok, retry_slot} =
             update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
 
-          enqueue_publish_job(retry_slot)
+          maybe_enqueue_publish_job(retry_slot, opts)
           retry_slot
 
         nil ->
           case create_slot(string_attrs) do
             {:ok, slot} ->
-              enqueue_publish_job(slot)
+              maybe_enqueue_publish_job(slot, opts)
               slot
 
             {:error, changeset} ->
@@ -96,10 +96,18 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
       end
     end)
   end
-end
+  end
 
   def schedule_variant(%Variant{}, _attrs, _opts) do
     {:error, :unapproved_variant}
+  end
+
+  defp maybe_enqueue_publish_job(slot, opts) do
+    if Keyword.get(opts, :enqueue, true) do
+      enqueue_publish_job(slot)
+    end
+
+    :ok
   end
 
   # ===========================================================================

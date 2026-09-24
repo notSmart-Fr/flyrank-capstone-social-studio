@@ -59,7 +59,8 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishAction do
     with {:ok, approved_variant} <- ensure_approved(variant),
          {:ok, slot} <-
            Publishing.schedule_variant(approved_variant, %{scheduled_at: scheduled_at},
-             mode: :manual
+             mode: :manual,
+             enqueue: mode != "now"
            ) do
       if mode == "now" do
         # Instant mode: Dispatch immediately

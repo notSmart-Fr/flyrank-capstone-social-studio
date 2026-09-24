@@ -1,6 +1,7 @@
 defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
   use FlyrankCapstoneSocialStudioWeb, :live_view
 
+  alias Phoenix.PubSub
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Content.Post
 
@@ -41,6 +42,12 @@ defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
 
     case Content.delete_post(post) do
       {:ok, _deleted_post} ->
+        PubSub.broadcast(
+          FlyrankCapstoneSocialStudio.PubSub,
+          "post:#{post.id}",
+          :post_deleted
+        )
+
         # Calculate new count (or call Content.count_posts())
         new_count = max(0, socket.assigns.posts_count - 1)
 
