@@ -10,6 +10,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker do
   alias FlyrankCapstoneSocialStudio.PubSub
 
   @impl Oban.Worker
+  @spec perform(Oban.Job.t()) :: :ok | {:error, binary()}
   def perform(%Oban.Job{args: %{"slot_id" => slot_id}}) do
     Logger.info("⚙️ [PUBLISH WORKER] Starting execution for slot_id: #{slot_id}")
 
@@ -38,7 +39,12 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker do
 
         # Broadcast failures to both channels
         Phoenix.PubSub.broadcast(PubSub, "publishing:events", {:slot_failed, slot, error_msg})
-        Phoenix.PubSub.broadcast(PubSub, "post:#{slot.variant.post_id}", {:slot_failed, slot, error_msg})
+
+        Phoenix.PubSub.broadcast(
+          PubSub,
+          "post:#{slot.variant.post_id}",
+          {:slot_failed, slot, error_msg}
+        )
 
         {:error, error_msg}
     end

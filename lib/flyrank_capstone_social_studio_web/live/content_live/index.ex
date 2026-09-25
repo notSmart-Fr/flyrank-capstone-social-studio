@@ -6,6 +6,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.ContentLive.Index do
   alias FlyrankCapstoneSocialStudio.Content.Post
 
   @impl true
+  @spec mount(any(), any(), map()) :: {:ok, map()}
   def mount(_params, _session, socket) do
     posts = Content.list_posts()
     changeset = Content.change_post(%Post{})

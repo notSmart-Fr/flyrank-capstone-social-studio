@@ -79,7 +79,19 @@ defmodule FlyrankCapstoneSocialStudioWeb.Telemetry do
       summary("vm.memory.total", unit: {:byte, :kilobyte}),
       summary("vm.total_run_queue_lengths.total"),
       summary("vm.total_run_queue_lengths.cpu"),
-      summary("vm.total_run_queue_lengths.io")
+      summary("vm.total_run_queue_lengths.io"),
+      # ===================================================================
+      # ADDED: OBAN BACKGROUND JOB METRICS
+      # ===================================================================
+      counter("oban.job.stop.count", tags: [:worker, :state]),
+      summary("oban.job.stop.duration", unit: {:native, :millisecond}, tags: [:worker]),
+      counter("oban.job.exception.count", tags: [:worker]),
+
+      # ===================================================================
+      # ADDED: REQ EXTERNAL HTTP METRICS (Gemini / Telegram / API Calls)
+      # ===================================================================
+      counter("req.request.stop.count", tags: [:status]),
+      summary("req.request.stop.duration", unit: {:native, :millisecond}, tags: [:host])
     ]
   end
 

@@ -1,7 +1,7 @@
 defmodule FlyrankCapstoneSocialStudio.Publishing.PublishAttempt do
   use Ecto.Schema
   import Ecto.Changeset
-
+  @type t :: %__MODULE__{}
   schema "publish_attempts" do
     field :adapter_name, :string
     field :status, :string
@@ -13,6 +13,20 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.PublishAttempt do
     timestamps(type: :utc_datetime)
   end
 
+  @spec changeset(
+          {map(),
+           %{
+             optional(atom()) =>
+               atom()
+               | {:array | :assoc | :embed | :in | :map | :parameterized | :supertype | :try,
+                  any()}
+           }}
+          | %{
+              :__struct__ => atom() | %{:__changeset__ => any(), optional(any()) => any()},
+              optional(atom()) => any()
+            },
+          %{optional(:__struct__) => none(), optional(atom() | binary()) => any()}
+        ) :: Ecto.Changeset.t()
   @doc false
   def changeset(publish_attempt, attrs) do
     changeset =

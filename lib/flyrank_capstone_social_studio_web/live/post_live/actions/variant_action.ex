@@ -1,6 +1,7 @@
 defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction do
   use FlyrankCapstoneSocialStudioWeb, :html
 
+  @spec variant_action(any()) :: Phoenix.LiveView.Rendered.t()
   def variant_action(assigns)
   embed_templates "variant_action.html"
 

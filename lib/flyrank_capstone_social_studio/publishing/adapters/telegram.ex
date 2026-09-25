@@ -1,6 +1,8 @@
 defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
   @behaviour FlyrankCapstoneSocialStudio.Publishing.SocialPublisher
 
+  @spec publish(any()) ::
+          {:error, <<_::64, _::_*8>>} | {:ok, %{external_id: binary(), raw_response: <<_::168>>}}
   @doc """
   Publishes text to a Telegram channel via the Telegram Bot API.
   """
@@ -37,7 +39,8 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
           {:error, "Network failure: #{inspect(reason)}"}
       end
     else
-      {:error, "Telegram credentials are missing: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required"}
+      {:error,
+       "Telegram credentials are missing: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required"}
     end
   end
 end

@@ -49,3 +49,6 @@ System.put_env("GEMINI_API_KEY", "")
 # Configure default AI provider adapter for test environment
 config :flyrank_capstone_social_studio,
   ai_adapter: FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter
+
+config :hammer,
+  backend: {Hammer.Backend.ETS, [expiry_ms: 60_000, cleanup_interval_ms: 60_000]}

@@ -2,6 +2,9 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn do
   @behaviour FlyrankCapstoneSocialStudio.Publishing.SocialPublisher
 
   @impl true
+  @spec publish(any()) ::
+          {:error, <<_::384>>}
+          | {:ok, %{external_id: <<_::64, _::_*8>>, raw_response: <<_::64, _::_*8>>}}
   def publish(content, opts \\ []) do
     should_fail? = Keyword.get(opts, :simulate_failure, false)
 

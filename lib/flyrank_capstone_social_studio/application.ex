@@ -4,9 +4,24 @@ defmodule FlyrankCapstoneSocialStudio.Application do
   @moduledoc false
 
   use Application
+  require Logger
 
   @impl true
+  @spec start(any(), any()) :: {:error, any()} | {:ok, pid()}
   def start(_type, _args) do
+    # 1. Attach Telemetry Handlers FIRST (before Oban initializes)
+    :telemetry.attach(
+      "global-oban-errors",
+      [:oban, :job, :exception],
+      fn _event, _measurements, meta, _config ->
+        Logger.error(
+          "[GLOBAL OBAN CRASH] Worker #{meta.job.worker} failed: #{inspect(meta.reason)}"
+        )
+      end,
+      %{}
+    )
+
+    # 2. Define Supervision Tree
     children = [
       FlyrankCapstoneSocialStudioWeb.Telemetry,
       FlyrankCapstoneSocialStudio.Repo,
@@ -16,13 +31,11 @@ defmodule FlyrankCapstoneSocialStudio.Application do
       {Finch, name: FlyrankCapstoneSocialStudio.Finch},
       # Start the background worker scheduler
       {Oban, Application.fetch_env!(:flyrank_capstone_social_studio, Oban)},
-      # {FlyrankCapstoneSocialStudio.Worker, arg},
       # Start to serve requests, typically the last entry
       FlyrankCapstoneSocialStudioWeb.Endpoint
     ]
 
-    # See https://elixir.hexdocs.pm/Supervisor.html
-    # for other strategies and supported options
+    # 3. Start Supervisor
     opts = [strategy: :one_for_one, name: FlyrankCapstoneSocialStudio.Supervisor]
     Supervisor.start_link(children, opts)
   end
@@ -30,6 +43,7 @@ defmodule FlyrankCapstoneSocialStudio.Application do
   # Tell Phoenix to update the endpoint configuration
   # whenever the application is updated.
   @impl true
+  @spec config_change(any(), any(), any()) :: :ok
   def config_change(changed, _new, removed) do
     FlyrankCapstoneSocialStudioWeb.Endpoint.config_change(changed, removed)
     :ok

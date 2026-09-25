@@ -1,6 +1,7 @@
 defmodule FlyrankCapstoneSocialStudioWeb.Router do
   use FlyrankCapstoneSocialStudioWeb, :router
   import Phoenix.LiveDashboard.Router
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -12,6 +13,13 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
+    # 1. Block general IP/User request flooding (Max 10 requests per 5 seconds)
+    plug FlyrankCapstoneSocialStudioWeb.Plugs.RateLimiter, scale_ms: 5_000, limit: 10
+  end
+
+  pipeline :idempotent_api do
+    # 2. Lock concurrent double-clicks and serve cached responses
+    plug FlyrankCapstoneSocialStudioWeb.Plugs.IdempotencyLock
   end
 
   # ===================================================================
@@ -27,10 +35,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
   # Application API Endpoints
   # ===================================================================
   scope "/api", FlyrankCapstoneSocialStudioWeb do
-    pipe_through :api
+    pipe_through [:api, :idempotent_api]
 
+    # Ingestion & Creation
     post "/blog-posts", PostController, :create
-
     # Variant & Campaign Post Management
     patch "/variants/:id", VariantController, :update
     post "/variants/:id/approve", VariantController, :approve
@@ -51,11 +59,13 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
   # ===================================================================
   scope "/", FlyrankCapstoneSocialStudioWeb do
     pipe_through :browser
+
     # Route root directly to ContentLive.Index
     live "/", ContentLive.Index, :index
     live "/posts", ContentLive.Index, :index
     live "/posts/:id", PostLive.Show, :show
     live "/analytics", AnalyticsLive.Index, :index
+
     # Live_dashboard route for system monitoring
     live_dashboard "/dashboard", metrics: FlyrankCapstoneSocialStudioWeb.Telemetry
   end

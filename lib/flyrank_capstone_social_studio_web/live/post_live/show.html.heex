@@ -1,6 +1,6 @@
 <div class="space-y-6">
   <!-- SECTION 1 & 2: HEADER SLICE -->
-  <FlyrankCapstoneSocialStudioWeb.PostLive.Components.InspectorHeader.render post={@post} />
+  <InspectorHeader.render post={@post} />
 
   <!-- SECTION 3: SPLIT INSPECTION LAYOUT -->
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -33,7 +33,7 @@
         Social Variants & Editor
       </.h3>
 
-      <FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction.variant_action
+      <VariantAction.variant_action
         post={@post}
         current_variant={@current_variant}
         active_tab={@active_tab}
@@ -46,7 +46,7 @@
   </div>
 
   <!-- A/B SELECTION MODAL SLICE -->
-  <FlyrankCapstoneSocialStudioWeb.PostLive.Actions.AiAction.ai_action
+  <AiAction.ai_action
     show={@show_ab_modal}
     ai_candidates={@ai_candidates}
     active_tab={@active_tab}

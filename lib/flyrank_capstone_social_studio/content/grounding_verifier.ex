@@ -3,6 +3,8 @@ defmodule FlyrankCapstoneSocialStudio.Content.GroundingVerifier do
   Verifies that claims in a generated variant exist in the source post.
   """
 
+  @spec verify_grounding(any(), any()) ::
+          {:ok, :grounded} | {:error, :hallucination_detected, any()}
   @doc """
   Verifies variant claims against source text using Gemini.
   Returns {:ok, :grounded} or {:error, :hallucination_detected, details}.

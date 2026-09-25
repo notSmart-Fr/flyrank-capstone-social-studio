@@ -9,6 +9,8 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
   alias FlyrankCapstoneSocialStudio.Publishing.{Slot, PublishAttempt}
   alias FlyrankCapstoneSocialStudio.Content
 
+  @spec dispatch_slot(FlyrankCapstoneSocialStudio.Publishing.Slot.t(), any()) ::
+          {:error, any()} | {:ok, any()}
   @doc """
   Short-circuits immediately if the slot is already published to enforce idempotency.
   """

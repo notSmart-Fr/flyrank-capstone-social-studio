@@ -5,6 +5,7 @@ defmodule FlyrankCapstoneSocialStudio.Release do
   """
   @app :flyrank_capstone_social_studio
 
+  @spec migrate() :: list()
   def migrate do
     load_app()
 
@@ -13,6 +14,7 @@ defmodule FlyrankCapstoneSocialStudio.Release do
     end
   end
 
+  @spec rollback(atom(), any()) :: {:ok, any(), any()}
   def rollback(repo, version) do
     load_app()
     {:ok, _, _} = Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))

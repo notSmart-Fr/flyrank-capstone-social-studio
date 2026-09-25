@@ -76,7 +76,8 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
       {:bandit, "~> 1.5"},
       {:oban, "~> 2.18"},
       {:floki, "~> 0.38.4"},
-      {:petal_components, "~> 4.0"}
+      {:petal_components, "~> 4.0"},
+      {:hammer, "~> 6.1"}
     ]
   end
 

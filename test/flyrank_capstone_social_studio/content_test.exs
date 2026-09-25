@@ -7,46 +7,46 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
   # 1. Ingestion Input Handling (Markdown vs. URL)
   # ===========================================================================
   describe "ingestion sources" do
-    test "ingest_and_generate/2 handles raw markdown input" do
+    test "ingest_and_template/3 handles raw markdown input" do
       post_params = %{
         "title" => "Markdown Ingestion Test",
         "content" => "# Title\n\nDirect Markdown body content without external fetches.",
         "source_type" => "markdown"
       }
 
-      assert {:ok, {post, _variants}} = Content.ingest_and_generate(post_params, ["telegram"])
+      assert {:ok, {post, _variants}} = Content.ingest_and_template(post_params, ["telegram"])
 
       assert post.source_type == "markdown"
       assert post.content =~ "Direct Markdown body content"
     end
 
-    test "ingest_and_generate/2 rejects invalid source types via Post schema validation" do
+    test "ingest_and_template/3 rejects invalid source types via Post schema validation" do
       post_params = %{
         "title" => "Invalid Source Test",
         "content" => "Some text",
         "source_type" => "pdf"
       }
 
-      assert {:error, changeset} = Content.ingest_and_generate(post_params, ["telegram"])
+      assert {:error, changeset} = Content.ingest_and_template(post_params, ["telegram"])
       refute changeset.valid?
       assert errors_on(changeset).source_type != nil
     end
 
-    test "ingest_and_generate/2 requires url parameter when source_type is url" do
+    test "ingest_and_template/3 requires url parameter when source_type is url" do
       post_params = %{
         "title" => "Missing URL Test",
         "source_type" => "url"
       }
 
-      assert {:error, _reason} = Content.ingest_and_generate(post_params, ["telegram"])
+      assert {:error, _reason} = Content.ingest_and_template(post_params, ["telegram"])
     end
   end
 
   # ===========================================================================
-  # 2. Variant Constraint Profiles & AI Cost Tracking
+  # 2. Variant Constraint Profiles & Template Ingestion
   # ===========================================================================
-  describe "variant constraint profiles and cost tracking" do
-    test "ingest_and_generate/2 creates valid A/B variants and tracks AI costs" do
+  describe "variant constraint profiles and local templating" do
+    test "ingest_and_template/3 creates valid template variants for specified platforms" do
       post_params = %{
         "title" => "Understanding Idempotency in Elixir",
         "content" =>
@@ -55,41 +55,21 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
       }
 
       assert {:ok, {post, variants}} =
-               Content.ingest_and_generate(post_params, ["telegram", "mock_x"])
+               Content.ingest_and_template(post_params, ["telegram", "mock_x"])
 
       assert post.id != nil
-      # 2 platforms x 2 variants (Variant A + Variant B) = 4 total variants
-      assert length(variants) == 4
+      # 1 template variant per platform (2 total)
+      assert length(variants) == 2
 
       telegram_variants = Enum.filter(variants, &(&1.platform == "telegram"))
       mock_x_variants = Enum.filter(variants, &(&1.platform == "mock_x"))
 
-      assert length(telegram_variants) == 2
-      assert length(mock_x_variants) == 2
+      assert length(telegram_variants) == 1
+      assert length(mock_x_variants) == 1
       assert Enum.all?(variants, &(&1.status == "draft"))
-
-      # --- Assert AI Token & Cost Tracking ---
-      assert Enum.all?(variants, &(&1.prompt_tokens >= 0))
-      assert Enum.all?(variants, &(&1.completion_tokens >= 0))
-      assert Enum.all?(variants, &(&1.total_tokens >= 0))
-
-      assert Enum.all?(
-               variants,
-               &(Decimal.compare(&1.generation_cost, Decimal.new("0.0")) != :lt)
-             )
-
-      # Assert parent Post has accumulated the summed generation cost
-      assert post.total_ai_cost != nil
-
-      assert Enum.all?(
-               variants,
-               &(&1.generation_cost != nil and
-                   Decimal.compare(&1.generation_cost, Decimal.new("0.0")) != :lt)
-             )
     end
 
     test "variant changeset blocks rule-breaking content with explicit error messages naming the rules" do
-      # Breaks Length (>280), Hashtag Count (>2), and Tone Rules (banned casual words/all-caps)
       invalid_content = String.duplicate("a", 290) <> " OMG SLAY #one #two #three"
 
       {:error, changeset} =
@@ -117,61 +97,59 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
   # 3. Grounding Verification Audit (Fake Statistic Detection)
   # ===========================================================================
   describe "factual grounding verification" do
-    test "ingest_and_generate/2 flags variants with fake or hallucinated claims as rejected" do
-      # Grounding test: source post contains NO statistics
+    test "ingest_and_template/3 creates initial draft variants ready for audit" do
       post_params = %{
         "title" => "Grounding Test Post",
         "content" => "Elixir relies on BEAM processes for fault-tolerant applications.",
         "source_type" => "markdown"
       }
 
-      assert {:ok, {_post, variants}} = Content.ingest_and_generate(post_params, ["telegram"])
-
-      # If GroundingVerifier triggers a failure on an ungrounded claim or mock hallucination,
-      # the variant status will be set to "rejected" with a populated rejection_reason.
-      rejected_variants = Enum.filter(variants, &(&1.status == "rejected"))
-
-      for variant <- rejected_variants do
-        assert variant.rejection_reason =~ "Grounding Audit Failed"
-      end
+      assert {:ok, {_post, variants}} = Content.ingest_and_template(post_params, ["telegram"])
+      assert Enum.all?(variants, &(&1.status == "draft"))
     end
   end
 
-  # 4. Content Hash Deduplication
-  describe "ingest_and_generate/2 deduplication" do
-    test "returns existing post and variants when duplicate content is ingested within 5 minutes" do
+  # ===========================================================================
+  # 4. Idempotency Key Deduplication
+  # ===========================================================================
+  describe "ingest_and_template/3 idempotency" do
+    test "returns cached post and variants when duplicate idempotency key is passed" do
+      key = "test-uuid-key-1234"
+
       post_attrs = %{
         "title" => "Elixir Testing Tips",
         "content" => "Robust test suites catch concurrent edge cases early.",
         "source_type" => "markdown"
       }
 
-      # 1. First Ingestion
-      assert {:ok, {post1, variants1}} = Content.ingest_and_generate(post_attrs, ["telegram"])
-      assert post1.content_hash != nil
+      # 1. First Ingestion with explicit idempotency key
+      assert {:ok, {post1, variants1}} =
+               Content.ingest_and_template(post_attrs, ["telegram"], key)
 
-      # 2. Second Ingestion with identical title and content
-      assert {:ok, {post2, variants2}} = Content.ingest_and_generate(post_attrs, ["telegram"])
+      # 2. Second Ingestion with the exact same key
+      assert {:ok, {post2, variants2}} =
+               Content.ingest_and_template(post_attrs, ["telegram"], key)
 
       # Verify it returned the exact same Post record from DB without recreating
       assert post1.id == post2.id
       assert Enum.map(variants1, & &1.id) == Enum.map(variants2, & &1.id)
     end
 
-    test "populates content_hash correctly on Post creation" do
+    test "allows identical content ingestion when distinct idempotency keys are used" do
+      key1 = Ecto.UUID.generate()
+      key2 = Ecto.UUID.generate()
+
       post_attrs = %{
-        "title" => "Unique Post Title",
-        "content" => "Unique post content body.",
+        "title" => "Identical Title",
+        "content" => "Identical body content.",
         "source_type" => "markdown"
       }
 
-      {:ok, {post, _variants}} = Content.ingest_and_generate(post_attrs, ["telegram"])
+      {:ok, {post1, _variants1}} = Content.ingest_and_template(post_attrs, ["telegram"], key1)
+      {:ok, {post2, _variants2}} = Content.ingest_and_template(post_attrs, ["telegram"], key2)
 
-      expected_hash =
-        :crypto.hash(:sha256, "Unique Post Title:Unique post content body.")
-        |> Base.encode16()
-
-      assert post.content_hash == expected_hash
+      # Distinct idempotency keys produce distinct database entries
+      refute post1.id == post2.id
     end
   end
 end

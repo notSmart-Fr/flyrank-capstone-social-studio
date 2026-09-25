@@ -14,6 +14,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.AiAction do
   alias FlyrankCapstoneSocialStudio.Content.GenerateAiVariants
   alias FlyrankCapstoneSocialStudioWeb.PostLive.Queries.PostQuery
 
+  @spec generate_platform_variant(any(), any()) :: {:noreply, any()}
   def generate_platform_variant(socket, platform) do
     post = socket.assigns.post
 

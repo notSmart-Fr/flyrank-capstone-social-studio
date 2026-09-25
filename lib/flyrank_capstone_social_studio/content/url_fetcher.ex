@@ -5,6 +5,8 @@ defmodule FlyrankCapstoneSocialStudio.Content.UrlFetcher do
 
   @user_agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
+  @spec fetch_and_extract(binary()) ::
+          {:error, :empty_article_content | <<_::64, _::_*8>>} | {:ok, binary()}
   @doc """
   Fetches a URL over HTTP and returns `{:ok, extracted_text}` or `{:error, reason}`.
   """

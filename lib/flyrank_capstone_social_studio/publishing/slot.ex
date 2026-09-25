@@ -1,7 +1,7 @@
 defmodule FlyrankCapstoneSocialStudio.Publishing.Slot do
   use Ecto.Schema
   import Ecto.Changeset
-
+  @type t :: %__MODULE__{}
   schema "slots" do
     field :scheduled_at, :utc_datetime
     field :status, :string, default: "pending"
@@ -12,6 +12,20 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Slot do
     timestamps()
   end
 
+  @spec changeset(
+          {map(),
+           %{
+             optional(atom()) =>
+               atom()
+               | {:array | :assoc | :embed | :in | :map | :parameterized | :supertype | :try,
+                  any()}
+           }}
+          | %{
+              :__struct__ => atom() | %{:__changeset__ => any(), optional(any()) => any()},
+              optional(atom()) => any()
+            },
+          :invalid | %{optional(:__struct__) => none(), optional(atom() | binary()) => any()}
+        ) :: Ecto.Changeset.t()
   @doc false
   def changeset(slot, attrs) do
     slot

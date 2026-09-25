@@ -3,6 +3,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
 
   alias Phoenix.PubSub
   alias FlyrankCapstoneSocialStudioWeb.PostLive.Queries.PostQuery
+  alias FlyrankCapstoneSocialStudioWeb.PostLive.Components.InspectorHeader
   alias FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction
   alias FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishAction
   alias FlyrankCapstoneSocialStudioWeb.PostLive.Actions.AiAction
@@ -83,11 +84,14 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
   @impl true
   def handle_event("select_variant", %{"variant_id" => variant_id}, socket),
     do: VariantAction.select_variant(socket, variant_id)
-    # Oban Worker succeeded -> reload post and inform UI
+
+  # Oban Worker succeeded -> reload post and inform UI
   @impl true
   def handle_info({:slot_published, _slot}, socket) do
     reloaded_post = PostQuery.get_post_details(socket.assigns.post.id)
-    active_variant = PostQuery.find_variant_for_platform(reloaded_post.variants, socket.assigns.active_tab)
+
+    active_variant =
+      PostQuery.find_variant_for_platform(reloaded_post.variants, socket.assigns.active_tab)
 
     {:noreply,
      socket

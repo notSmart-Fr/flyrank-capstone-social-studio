@@ -12,6 +12,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Scheduler do
 
   @poll_interval :timer.seconds(5)
 
+  @spec start_link() :: :ignore | {:error, any()} | {:ok, pid()}
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end

@@ -16,6 +16,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # Scheduling & Oban Integration
   # ===========================================================================
 
+  @spec schedule_variant(FlyrankCapstoneSocialStudio.Content.Variant.t(), any()) :: any()
   @doc """
   Schedules an approved variant into a publication slot and enqueues its dispatch job.
 
@@ -44,58 +45,59 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   def schedule_variant(variant, attrs, opts \\ [])
 
   def schedule_variant(%Variant{status: "approved"} = variant, attrs, opts) do
-  mode = Keyword.get(opts, :mode, :manual)
-  scheduled_at = resolve_scheduled_at(mode, variant.platform, attrs)
+    mode = Keyword.get(opts, :mode, :manual)
+    scheduled_at = resolve_scheduled_at(mode, variant.platform, attrs)
 
-  # 1. Resolve or generate an idempotency key fallback
-  raw_key = Map.get(attrs, :idempotency_key) || Map.get(attrs, "idempotency_key")
-  idempotency_key = raw_key || "slot_#{variant.id}_#{System.system_time(:microsecond)}"
+    # 1. Resolve or generate an idempotency key fallback
+    raw_key = Map.get(attrs, :idempotency_key) || Map.get(attrs, "idempotency_key")
+    idempotency_key = raw_key || "slot_#{variant.id}_#{System.system_time(:microsecond)}"
 
-  string_attrs =
-    attrs
-    |> Map.new(fn {k, v} -> {to_string(k), v} end)
-    |> Map.put("variant_id", variant.id)
-    |> Map.put("scheduled_at", scheduled_at)
-    |> Map.put("idempotency_key", idempotency_key) # 👈 Guarantees key presence
+    string_attrs =
+      attrs
+      |> Map.new(fn {k, v} -> {to_string(k), v} end)
+      |> Map.put("variant_id", variant.id)
+      |> Map.put("scheduled_at", scheduled_at)
+      # 👈 Guarantees key presence
+      |> Map.put("idempotency_key", idempotency_key)
 
-  # 2. If caller provided an explicit idempotency key, execute direct path
-  if raw_key do
-    case create_slot(string_attrs) do
-      {:ok, slot} ->
-        maybe_enqueue_publish_job(slot, opts)
-        {:ok, slot}
+    # 2. If caller provided an explicit idempotency key, execute direct path
+    if raw_key do
+      case create_slot(string_attrs) do
+        {:ok, slot} ->
+          maybe_enqueue_publish_job(slot, opts)
+          {:ok, slot}
 
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  else
-    # 3. Automatic fallback path: uses generated key in transaction
-    Repo.transaction(fn ->
-      lock_variant_row(variant.id)
-
-      case get_latest_variant_slot(variant.id) do
-        %Slot{status: "failed"} = failed_slot ->
-          {:ok, retry_slot} =
-            update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
-
-          maybe_enqueue_publish_job(retry_slot, opts)
-          retry_slot
-
-        nil ->
-          case create_slot(string_attrs) do
-            {:ok, slot} ->
-              maybe_enqueue_publish_job(slot, opts)
-              slot
-
-            {:error, changeset} ->
-              Repo.rollback(changeset)
-          end
-
-        %Slot{} = existing_slot ->
-          existing_slot
+        {:error, changeset} ->
+          {:error, changeset}
       end
-    end)
-  end
+    else
+      # 3. Automatic fallback path: uses generated key in transaction
+      Repo.transaction(fn ->
+        lock_variant_row(variant.id)
+
+        case get_latest_variant_slot(variant.id) do
+          %Slot{status: "failed"} = failed_slot ->
+            {:ok, retry_slot} =
+              update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
+
+            maybe_enqueue_publish_job(retry_slot, opts)
+            retry_slot
+
+          nil ->
+            case create_slot(string_attrs) do
+              {:ok, slot} ->
+                maybe_enqueue_publish_job(slot, opts)
+                slot
+
+              {:error, changeset} ->
+                Repo.rollback(changeset)
+            end
+
+          %Slot{} = existing_slot ->
+            existing_slot
+        end
+      end)
+    end
   end
 
   def schedule_variant(%Variant{}, _attrs, _opts) do
@@ -138,6 +140,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # Audit History Queries
   # ===========================================================================
 
+  @spec list_history() :: any()
   @doc """
   Lists all publish attempts with preloaded slots and variants for history audit logs.
   """
@@ -153,21 +156,31 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # Slot CRUD Operations
   # ===========================================================================
 
+  @spec list_slots() :: any()
   def list_slots, do: Repo.all(Slot)
   def get_slot!(id), do: Repo.get!(Slot, id)
 
+  @spec create_slot(
+          :invalid
+          | %{optional(:__struct__) => none(), optional(atom() | binary()) => any()}
+        ) :: any()
   def create_slot(attrs) do
     %Slot{}
     |> Slot.changeset(attrs)
     |> Repo.insert()
   end
 
+  @spec update_slot(
+          FlyrankCapstoneSocialStudio.Publishing.Slot.t(),
+          :invalid | %{optional(:__struct__) => none(), optional(atom() | binary()) => any()}
+        ) :: any()
   def update_slot(%Slot{} = slot, attrs) do
     slot
     |> Slot.changeset(attrs)
     |> Repo.update()
   end
 
+  @spec delete_slot(FlyrankCapstoneSocialStudio.Publishing.Slot.t()) :: any()
   def delete_slot(%Slot{} = slot), do: Repo.delete(slot)
   def change_slot(%Slot{} = slot, attrs \\ %{}), do: Slot.changeset(slot, attrs)
 

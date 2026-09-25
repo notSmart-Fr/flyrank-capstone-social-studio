@@ -4,6 +4,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.AnalyticsLive.Index do
   alias FlyrankCapstoneSocialStudio.Content
 
   @impl true
+  @spec mount(any(), any(), map()) :: {:ok, map()}
   def mount(_params, _session, socket) do
     posts = Content.list_posts()
 

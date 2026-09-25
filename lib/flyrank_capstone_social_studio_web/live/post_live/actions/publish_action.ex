@@ -1,6 +1,7 @@
 defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishAction do
   use FlyrankCapstoneSocialStudioWeb, :html
 
+  @spec publish_action(any()) :: Phoenix.LiveView.Rendered.t()
   def publish_action(assigns)
   embed_templates "publish_action.html"
 
@@ -15,6 +16,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishAction do
   alias FlyrankCapstoneSocialStudio.Publishing
   alias FlyrankCapstoneSocialStudioWeb.PostLive.Queries.PostQuery
 
+  @spec publish_platform(map(), any()) :: {:noreply, map()}
   def publish_platform(socket, variant_id), do: open_publish_modal(socket, variant_id)
 
   # Modal Trigger: Opens modal and sets current target variant
@@ -25,6 +27,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishAction do
      |> assign(:publishing_variant_id, variant_id)}
   end
 
+  @spec close_schedule_modal(map()) :: {:noreply, map()}
   def close_schedule_modal(socket) do
     {:noreply,
      socket
