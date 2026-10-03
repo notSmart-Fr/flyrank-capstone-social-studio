@@ -2,6 +2,55 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   @moduledoc """
   The Content context managing blog posts, URL content fetching,
   platform variant generation, idempotency locks, and reviewer workflows.
+  equenceDiagram
+    autonumber
+    actor User as User / Client API
+    participant Content as Content Context
+    participant Repo as PostgreSQL (Ecto)
+    participant Oban as Oban Worker
+    participant Gemini as Gemini LLM API
+    participant Audit as GroundingVerifier
+
+    box Ingestion Phase
+    User->>Content: ingest_and_template(attrs, platforms, idempotency_key)
+    alt Key processing or completed?
+        Content->>Repo: Check IdempotencyKey
+        Repo-->>Content: Return cached payload or in-flight error
+        Content-->>User: {:ok, cached} OR {:error, :concurrent_request_in_flight}
+    else Key is new
+        Content->>Repo: Insert IdempotencyKey ("processing")
+        Content->>Repo: Save %Post{} & Initial Local Draft %Variant{}s
+        Content->>Repo: Update IdempotencyKey ("completed")
+        Content-->>User: {:ok, {post, local_variants}}
+    end
+    end
+
+    box Asynchronous AI Generation Phase
+    User->>Content: queue_ai_variant_generation(post_id, platform)
+    Content->>Oban: Enqueue GenerateVariantsWorker
+    Oban->>Gemini: POST /generateContent (Generate A/B Variants)
+    Gemini-->>Oban: 200 OK (A/B JSON + usageMetadata)
+    Oban->>Repo: Log AiGeneration telemetry & update Post.total_ai_cost
+    end
+
+    box Grounding Audit Phase
+    Oban->>Audit: verify_grounding(post.content, generated_variant)
+    Audit->>Gemini: POST /generateContent (Source vs Variant Audit)
+
+    alt Factual claims supported
+        Gemini-->>Audit: {"is_grounded": true}
+        Audit-->>Oban: {:ok, :grounded}
+        Oban->>Repo: Save %Variant{status: "draft"}
+    else Hallucination / Fake stats detected
+        Gemini-->>Audit: {"is_grounded": false, "unsupported_claims": [...]}
+        Audit-->>Oban: {:error, :hallucination_detected, claims}
+        Oban->>Repo: Save %Variant{status: "rejected", rejection_reason: "..."}
+    else Network / Audit API Error
+        Gemini-->>Audit: HTTP 500 / Timeout
+        Audit-->>Oban: {:error, :audit_failed, reason}
+        Oban->>Repo: Save %Variant{status: "needs_review", rejection_reason: "..."}
+    end
+    end
   """
 
   import Ecto.Query, warn: false
@@ -144,8 +193,6 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   # Idempotent Ingestion & Templating
   # ===========================================================================
 
-  @spec ingest_and_template(map(), [binary()]) ::
-          {:error, any()} | {:ok, {FlyrankCapstoneSocialStudio.Content.Post.t(), [map()]}}
   @doc """
   Ingests raw content or an external URL, constructs a base `%Post{}`, and generates
   local draft variants for specified platforms without external AI calls.

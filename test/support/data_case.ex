@@ -24,6 +24,7 @@ defmodule FlyrankCapstoneSocialStudio.DataCase do
       import Ecto.Changeset
       import Ecto.Query
       import FlyrankCapstoneSocialStudio.DataCase
+      use Oban.Testing, repo: FlyrankCapstoneSocialStudio.Repo
     end
   end
 

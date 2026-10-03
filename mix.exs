@@ -11,7 +11,41 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      # -----------------------------------------------------------------------
+      # ExDoc Documentation Configuration
+      # -----------------------------------------------------------------------
+      name: "Flyrank Capstone Social Studio",
+      source_url: "https://github.com/notSmart-Fr/flyrank-capstone-social-studio",
+      docs: [
+        main: "content_ingestion_and_grounding",
+        extras: [
+          "guides/content_ingestion_and_grounding.md"
+        ],
+        groups_for_extras: [
+          "Architecture & Guides": [
+            "guides/content_ingestion_and_grounding.md"
+          ]
+        ],
+        groups_for_modules: [
+          "Content Pipeline": [
+            FlyrankCapstoneSocialStudio.Content,
+            FlyrankCapstoneSocialStudio.Content.Post,
+            FlyrankCapstoneSocialStudio.Content.Variant,
+            FlyrankCapstoneSocialStudio.Content.IdempotencyKey
+          ],
+          "AI Generation & Auditing": [
+            FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Core,
+            FlyrankCapstoneSocialStudio.Content.GroundingVerifier,
+            FlyrankCapstoneSocialStudio.Content.AiGenerator,
+            FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter,
+            FlyrankCapstoneSocialStudio.Ai.Provider
+          ],
+          "Background Workers": [
+            FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Worker
+          ]
+        ]
+      ]
     ]
   end
 
@@ -59,13 +93,6 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
        app: false,
        compile: false,
        depth: 1},
-      {:daisyui,
-       github: "saadeghi/daisyui",
-       tag: "v5.5.20",
-       sparse: "packages/bundle",
-       app: false,
-       compile: false,
-       depth: 1},
       {:swoosh, "~> 1.16"},
       {:req, "~> 0.5"},
       {:telemetry_metrics, "~> 1.0"},
@@ -77,7 +104,17 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
       {:oban, "~> 2.18"},
       {:floki, "~> 0.38.4"},
       {:petal_components, "~> 4.0"},
-      {:hammer, "~> 6.1"}
+      {:hammer, "~> 6.1"},
+      # Local HTTP server mock for testing real HTTP calls (timeouts, 404s, 500s)
+      {:bypass, "~> 2.1", only: :test},
+
+      # Property-based testing (generates randomized inputs for edge cases)
+      {:stream_data, "~> 1.0", only: :test},
+
+      # Factory data generation (clean test structs without manual boilerplate)
+      {:ex_machina, "~> 2.8", only: :test},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false, warn_if_outdated: true}
     ]
   end
 

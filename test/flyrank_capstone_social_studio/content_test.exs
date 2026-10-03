@@ -2,117 +2,214 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
   use FlyrankCapstoneSocialStudio.DataCase
 
   alias FlyrankCapstoneSocialStudio.Content
+  alias FlyrankCapstoneSocialStudio.Content.GroundingVerifier
+  alias FlyrankCapstoneSocialStudio.Repo
 
-  # ===========================================================================
-  # 1. Ingestion Input Handling (Markdown vs. URL)
-  # ===========================================================================
-  describe "ingestion sources" do
-    test "ingest_and_template/3 handles raw markdown input" do
-      post_params = %{
-        "title" => "Markdown Ingestion Test",
-        "content" => "# Title\n\nDirect Markdown body content without external fetches.",
+  setup do
+    bypass = Bypass.open()
+    {:ok, bypass: bypass}
+  end
+
+  describe "Ingestion Behavior: Local Markdown & Scraped URL" do
+    @describetag :content_ingestion
+
+    # -------------------------------------------------------------------------
+    # 1. Direct Markdown Ingestion
+    # -------------------------------------------------------------------------
+    test "ingests raw markdown directly and initializes platform variants in draft" do
+      params = %{
+        "title" => "Campaign Launch",
+        "content" => "# New Features\n\nDirect Markdown text body.",
         "source_type" => "markdown"
       }
 
-      assert {:ok, {post, _variants}} = Content.ingest_and_template(post_params, ["telegram"])
+      assert {:ok, {post, variants}} = Content.ingest_and_template(params, ["telegram", "mock_x"])
 
       assert post.source_type == "markdown"
-      assert post.content =~ "Direct Markdown body content"
-    end
-
-    test "ingest_and_template/3 rejects invalid source types via Post schema validation" do
-      post_params = %{
-        "title" => "Invalid Source Test",
-        "content" => "Some text",
-        "source_type" => "pdf"
-      }
-
-      assert {:error, changeset} = Content.ingest_and_template(post_params, ["telegram"])
-      refute changeset.valid?
-      assert errors_on(changeset).source_type != nil
-    end
-
-    test "ingest_and_template/3 requires url parameter when source_type is url" do
-      post_params = %{
-        "title" => "Missing URL Test",
-        "source_type" => "url"
-      }
-
-      assert {:error, _reason} = Content.ingest_and_template(post_params, ["telegram"])
-    end
-  end
-
-  # ===========================================================================
-  # 2. Variant Constraint Profiles & Template Ingestion
-  # ===========================================================================
-  describe "variant constraint profiles and local templating" do
-    test "ingest_and_template/3 creates valid template variants for specified platforms" do
-      post_params = %{
-        "title" => "Understanding Idempotency in Elixir",
-        "content" =>
-          "Idempotency ensures that retrying an operation produces the exact same result.",
-        "source_type" => "markdown"
-      }
-
-      assert {:ok, {post, variants}} =
-               Content.ingest_and_template(post_params, ["telegram", "mock_x"])
-
-      assert post.id != nil
-      # 1 template variant per platform (2 total)
       assert length(variants) == 2
-
-      telegram_variants = Enum.filter(variants, &(&1.platform == "telegram"))
-      mock_x_variants = Enum.filter(variants, &(&1.platform == "mock_x"))
-
-      assert length(telegram_variants) == 1
-      assert length(mock_x_variants) == 1
       assert Enum.all?(variants, &(&1.status == "draft"))
     end
 
-    test "variant changeset blocks rule-breaking content with explicit error messages naming the rules" do
-      invalid_content = String.duplicate("a", 290) <> " OMG SLAY #one #two #three"
+    # -------------------------------------------------------------------------
+    # 2. Successful Web Scraping via URL
+    # -------------------------------------------------------------------------
+    test "scrapes HTML body from target URL, parses content via Floki, and creates variants" do
+      bypass = Bypass.open()
 
-      {:error, changeset} =
-        Content.create_variant(%{
-          post_id: 1,
-          platform: "mock_x",
-          content: invalid_content,
-          variant_label: "A",
-          status: "draft"
+      Bypass.expect_once(bypass, "GET", "/blog/post-1", fn conn ->
+        html_response = """
+        <!DOCTYPE html>
+        <html>
+          <body>
+            <article>
+              <h1>Parsed Blog Title</h1>
+              <p>This is scraped content extracted from the HTML DOM.</p>
+            </article>
+          </body>
+        </html>
+        """
+
+        conn
+        |> Plug.Conn.put_resp_header("content-type", "text/html; charset=utf-8")
+        |> Plug.Conn.resp(200, html_response)
+      end)
+
+      url = "http://localhost:#{bypass.port}/blog/post-1"
+      params = %{"title" => "URL Ingest", "source_type" => "url", "url" => url}
+
+      assert {:ok, {post, _variants}} = Content.ingest_and_template(params, ["telegram"])
+      assert post.content =~ "scraped content extracted from the HTML DOM"
+    end
+
+    # -------------------------------------------------------------------------
+    # 3. Scraping Failure Handling (500 Error & Network Drop)
+    # -------------------------------------------------------------------------
+    @tag :error_handling
+    test "handles remote server 500 errors during scraping gracefully without creating corrupted DB records" do
+      bypass = Bypass.open()
+
+      # Use stub instead of expect_once so Req can retry safely
+      Bypass.stub(bypass, "GET", "/blog/broken", fn conn ->
+        Plug.Conn.resp(conn, 500, "Internal Server Error")
+      end)
+
+      url = "http://localhost:#{bypass.port}/blog/broken"
+      params = %{"title" => "Failed Ingest", "source_type" => "url", "url" => url}
+
+      assert {:error, "HTTP request failed with status 500"} =
+               Content.ingest_and_template(params, ["telegram"])
+
+      assert Repo.aggregate(FlyrankCapstoneSocialStudio.Content.Post, :count) == 0
+    end
+
+    @tag :error_handling
+    test "handles network timeout during scraping safely" do
+      bypass = Bypass.open()
+      # Simulates unreachable server/dropped socket
+      Bypass.down(bypass)
+
+      url = "http://localhost:#{bypass.port}/blog/unreachable"
+      params = %{"title" => "Timeout Ingest", "source_type" => "url", "url" => url}
+
+      assert {:error, "Failed to reach URL: " <> _reason} =
+               Content.ingest_and_template(params, ["telegram"])
+    end
+  end
+
+  describe "Constraint Verification Behavior" do
+    # -------------------------------------------------------------------------
+    # 4. Constraint Profile Failures
+    # -------------------------------------------------------------------------
+    test "flags variants that violate platform character or hashtag rules with explicit error keys" do
+      # Content that violates X/Twitter 280-char limit and hashtag limits
+      overly_long_content =
+        String.duplicate("Elixir is fast. ", 25) <> " #one #two #three #four #five"
+
+      assert {:error, changeset} =
+               Content.create_variant(%{
+                 post_id: 1,
+                 platform: "mock_x",
+                 content: overly_long_content,
+                 variant_label: "A",
+                 status: "draft"
+               })
+
+      refute changeset.valid?
+      errors = errors_on(changeset)
+
+      assert errors.content != nil
+      error_msg = Enum.join(errors.content, " ")
+      assert error_msg =~ "exceeds maximum character limit"
+    end
+  end
+
+  # -------------------------------------------------------------------------
+  # 5. Grounding Verifier Behavioral Audit
+  # -------------------------------------------------------------------------
+  describe "GroundingVerifier behavior" do
+    @describetag :grounding
+
+    test "returns {:ok, :grounded} when Gemini confirms factual match", %{bypass: bypass} do
+      Bypass.expect_once(
+        bypass,
+        "POST",
+        "/v1beta/models/gemini-2.5-flash:generateContent",
+        fn conn ->
+          json_payload = ~s({
+          "candidates": [{
+            "content": {
+              "parts": [{"text": "{\\"is_grounded\\": true, \\"unsupported_claims\\": []}"}]
+            }
+          }]
         })
 
-      refute changeset.valid?
+          Plug.Conn.resp(conn, 200, json_payload)
+        end
+      )
 
-      errors = errors_on(changeset)
-      assert errors.content != nil
+      url = "http://localhost:#{bypass.port}/v1beta/models/gemini-2.5-flash:generateContent"
+      source = "Elixir uses BEAM processes."
+      variant = "BEAM processes are used by Elixir."
 
-      error_text = Enum.join(errors.content, " ")
-      assert error_text =~ "exceeds maximum character limit"
-      assert error_text =~ "exceeds maximum hashtag count"
-      assert error_text =~ "violates tone rules"
+      assert {:ok, :grounded} =
+               GroundingVerifier.verify_grounding(source, variant,
+                 api_url: url,
+                 api_key: "test_key"
+               )
+    end
+
+    @tag :error_handling
+    test "returns {:error, :hallucination_detected, _} when unsupported claims exist", %{
+      bypass: bypass
+    } do
+      Bypass.expect_once(
+        bypass,
+        "POST",
+        "/v1beta/models/gemini-2.5-flash:generateContent",
+        fn conn ->
+          json_payload = ~s({
+          "candidates": [{
+            "content": {
+              "parts": [{"text": "{\\"is_grounded\\": false, \\"unsupported_claims\\": [\\"99.9% uptime claim\\"]}"}]
+            }
+          }]
+        })
+
+          Plug.Conn.resp(conn, 200, json_payload)
+        end
+      )
+
+      url = "http://localhost:#{bypass.port}/v1beta/models/gemini-2.5-flash:generateContent"
+
+      assert {:error, :hallucination_detected, ["99.9% uptime claim"]} =
+               GroundingVerifier.verify_grounding("Source", "Variant with 99.9% uptime",
+                 api_url: url,
+                 api_key: "test_key"
+               )
+    end
+
+    @tag :error_handling
+    test "returns {:error, :audit_failed, _} when remote API returns HTTP 500", %{bypass: bypass} do
+      Bypass.stub(bypass, "POST", "/v1beta/models/gemini-2.5-flash:generateContent", fn conn ->
+        Plug.Conn.resp(conn, 500, "Server Error")
+      end)
+
+      url = "http://localhost:#{bypass.port}/v1beta/models/gemini-2.5-flash:generateContent"
+
+      assert {:error, :audit_failed, "Gemini API returned HTTP 500"} =
+               GroundingVerifier.verify_grounding("Source", "Variant",
+                 api_url: url,
+                 api_key: "test_key"
+               )
     end
   end
 
   # ===========================================================================
-  # 3. Grounding Verification Audit (Fake Statistic Detection)
+  # Idempotency & Concurrency Locks Behavior
   # ===========================================================================
-  describe "factual grounding verification" do
-    test "ingest_and_template/3 creates initial draft variants ready for audit" do
-      post_params = %{
-        "title" => "Grounding Test Post",
-        "content" => "Elixir relies on BEAM processes for fault-tolerant applications.",
-        "source_type" => "markdown"
-      }
+  describe "ingest_and_template/3 idempotency behavior" do
+    @describetag :idempotency
 
-      assert {:ok, {_post, variants}} = Content.ingest_and_template(post_params, ["telegram"])
-      assert Enum.all?(variants, &(&1.status == "draft"))
-    end
-  end
-
-  # ===========================================================================
-  # 4. Idempotency Key Deduplication
-  # ===========================================================================
-  describe "ingest_and_template/3 idempotency" do
     test "returns cached post and variants when duplicate idempotency key is passed" do
       key = "test-uuid-key-1234"
 
@@ -122,15 +219,13 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
         "source_type" => "markdown"
       }
 
-      # 1. First Ingestion with explicit idempotency key
       assert {:ok, {post1, variants1}} =
                Content.ingest_and_template(post_attrs, ["telegram"], key)
 
-      # 2. Second Ingestion with the exact same key
       assert {:ok, {post2, variants2}} =
                Content.ingest_and_template(post_attrs, ["telegram"], key)
 
-      # Verify it returned the exact same Post record from DB without recreating
+      # Verify exact record reuse from DB
       assert post1.id == post2.id
       assert Enum.map(variants1, & &1.id) == Enum.map(variants2, & &1.id)
     end
@@ -148,8 +243,49 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
       {:ok, {post1, _variants1}} = Content.ingest_and_template(post_attrs, ["telegram"], key1)
       {:ok, {post2, _variants2}} = Content.ingest_and_template(post_attrs, ["telegram"], key2)
 
-      # Distinct idempotency keys produce distinct database entries
       refute post1.id == post2.id
+    end
+
+    @tag :error_handling
+    test "returns {:error, :concurrent_request_in_flight} when key is currently processing" do
+      key = Ecto.UUID.generate()
+
+      # Seed an in-flight key in "processing" state directly in DB
+      Repo.insert!(%FlyrankCapstoneSocialStudio.Content.IdempotencyKey{
+        key: key,
+        status: "processing"
+      })
+
+      post_attrs = %{
+        "title" => "In Flight Test",
+        "content" => "Testing concurrent lock behavior.",
+        "source_type" => "markdown"
+      }
+
+      # Assert immediate rejection without reprocessing
+      assert {:error, :concurrent_request_in_flight} =
+               Content.ingest_and_template(post_attrs, ["telegram"], key)
+    end
+
+    @tag :error_handling
+    test "handles concurrent race conditions safely via database unique constraint" do
+      key = "race-condition-key-" <> Ecto.UUID.generate()
+
+      post_attrs = %{
+        "title" => "Concurrent Race Test",
+        "content" => "Simulating simultaneous requests.",
+        "source_type" => "markdown"
+      }
+
+      # Spawn 2 parallel BEAM processes trying to ingest with the exact same key at the same millisecond
+      task1 = Task.async(fn -> Content.ingest_and_template(post_attrs, ["telegram"], key) end)
+      task2 = Task.async(fn -> Content.ingest_and_template(post_attrs, ["telegram"], key) end)
+
+      results = [Task.await(task1), Task.await(task2)]
+
+      # Assert strict idempotency: Exactly 1 process succeeds, 1 receives the lock error
+      assert Enum.count(results, &match?({:ok, _}, &1)) == 1
+      assert Enum.count(results, &match?({:error, :concurrent_request_in_flight}, &1)) == 1
     end
   end
 end

@@ -1,7 +1,7 @@
 defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Core do
   @moduledoc """
   Core domain logic for generating A/B social media variants via Gemini
-  and verifying grounding against source text.
+  and verifying factual grounding against source text.
   """
 
   import Ecto.Query
@@ -14,7 +14,16 @@ defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Core do
   alias FlyrankCapstoneSocialStudio.Content.Post
   alias FlyrankCapstoneSocialStudio.Repo
 
-  def execute(post_id, platform) do
+  @doc """
+  Executes the A/B variant generation pipeline for a given post and target platform.
+
+  Accepts options (`opts`):
+    * `:api_url` - Overrides the Gemini endpoint for test mocking (`Bypass`).
+    * `:api_key` - Overrides the Gemini API key.
+  """
+  @spec execute(integer() | String.t(), String.t(), keyword()) ::
+          {:ok, %{variant_a: map(), variant_b: map()}} | {:error, term()}
+  def execute(post_id, platform, opts \\ []) do
     post = Content.get_post!(post_id)
 
     case ConstraintProfile.get(platform) do
@@ -22,14 +31,14 @@ defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Core do
         {:error, :unsupported_platform}
 
       profile ->
-        case AiGenerator.generate_ab_variants(post.content, platform, profile) do
+        case AiGenerator.generate_ab_variants(post.content, platform, profile, opts) do
           {:ok, result} ->
-            # Log financial telemetry independently
+            # 1. Log financial telemetry independently
             log_ai_generation(post.id, platform, result)
 
-            # Grounding verification
-            ground_a = GroundingVerifier.verify_grounding(post.content, result.variant_a)
-            ground_b = GroundingVerifier.verify_grounding(post.content, result.variant_b)
+            # 2. Pass runtime opts to GroundingVerifier so test Bypass URLs flow through
+            ground_a = GroundingVerifier.verify_grounding(post.content, result.variant_a, opts)
+            ground_b = GroundingVerifier.verify_grounding(post.content, result.variant_b, opts)
 
             {status_a, reason_a} = determine_grounding_status(ground_a)
             {status_b, reason_b} = determine_grounding_status(ground_b)
@@ -70,11 +79,22 @@ defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Core do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # Private Helpers
+  # ---------------------------------------------------------------------------
+
+  # Success case (2-tuple)
   defp determine_grounding_status({:ok, :grounded}), do: {"draft", nil}
 
-  defp determine_grounding_status({:error, :hallucination_detected, claims}) do
+  # Specific 3-tuple error cases
+  defp determine_grounding_status({:error, :hallucination_detected, claims})
+       when is_list(claims) do
     {"rejected",
      "Grounding Audit Failed: Fake or unsupported claims detected -> #{Enum.join(claims, ", ")}"}
+  end
+
+  defp determine_grounding_status({:error, :audit_failed, reason}) do
+    {"needs_review", "Grounding Audit Incomplete: #{reason}"}
   end
 
   defp log_ai_generation(post_id, platform, result) do
@@ -90,21 +110,8 @@ defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Core do
     })
     |> Repo.insert!()
 
+    # Atomic SQL increment ensures total_ai_cost updates reliably without relying on empty variant tables
     from(p in Post, where: p.id == ^post_id)
     |> Repo.update_all(inc: [total_ai_cost: result.cost])
-
-    update_post_total_ai_cost(post_id)
-  end
-
-  defp update_post_total_ai_cost(post_id) do
-    post = Content.get_post!(post_id)
-    variants = Content.get_post_variants(post_id)
-
-    total_cost =
-      Enum.reduce(variants, Decimal.new("0.0"), fn variant, acc ->
-        Decimal.add(acc, variant.generation_cost || Decimal.new("0.0"))
-      end)
-
-    Content.update_post(post, %{total_ai_cost: total_cost})
   end
 end

@@ -1,21 +1,31 @@
 defmodule FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter do
   @behaviour FlyrankCapstoneSocialStudio.Ai.Provider
 
-  @gemini_url "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+  @default_gemini_url "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
   @model_name "gemini-2.5-flash"
 
-  @input_rate_per_token 0.000000075
-  @output_rate_per_token 0.00000030
+  # Rates represented as Decimals for exact financial arithmetic
+  @input_rate Decimal.new("0.000000075")
+  @output_rate Decimal.new("0.00000030")
 
   @impl true
-  def generate_ab_variants(content, platform_name, profile) do
-    api_key = gemini_api_key()
+  def generate_ab_variants(content, platform_name, profile, opts \\ []) do
+    api_key = Keyword.get(opts, :api_key) || gemini_api_key()
+    api_url = Keyword.get(opts, :api_url) || default_url(api_key)
 
     if api_key && api_key != "" do
-      call_gemini_api(content, platform_name, profile, api_key)
+      call_gemini_api(content, platform_name, profile, api_url)
     else
       generate_fallback_ab(content, profile)
     end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Helpers
+  # ---------------------------------------------------------------------------
+
+  defp default_url(api_key) do
+    "#{@default_gemini_url}?key=#{api_key}"
   end
 
   defp gemini_api_key do
@@ -23,9 +33,7 @@ defmodule FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter do
       Application.get_env(:flyrank_capstone_social_studio, :gemini_api_key)
   end
 
-  defp call_gemini_api(content, platform_name, profile, api_key) do
-    url = "#{@gemini_url}?key=#{api_key}"
-
+  defp call_gemini_api(content, platform_name, profile, url) do
     prompt = """
     You are a social media strategist.
     Create TWO distinct variants (Variant A and Variant B) for the post on platform: #{platform_name}.
@@ -47,40 +55,46 @@ defmodule FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter do
 
     payload = %{
       contents: [%{parts: [%{text: prompt}]}],
-      generationConfig: %{response_mime_type: "application/json"}
+      generationConfig: %{
+        response_mime_type: "application/json",
+        temperature: 0.2
+      }
     }
 
-    case Req.post(url, json: payload) do
-      {:ok,
-       %{
-         status: 200,
-         body:
-           %{"candidates" => [%{"content" => %{"parts" => [%{"text" => json_text} | _]}} | _]} =
-               body
-       }} ->
-        case Jason.decode(json_text) do
-          {:ok, %{"variant_a" => a, "variant_b" => b}} ->
-            usage = Map.get(body, "usageMetadata", %{})
-            prompt_tokens = Map.get(usage, "promptTokenCount", 0)
-            completion_tokens = Map.get(usage, "candidatesTokenCount", 0)
-            total_tokens = Map.get(usage, "totalTokenCount", prompt_tokens + completion_tokens)
+    case Req.post(url, json: payload, receive_timeout: 10_000, retry: :safe_transient) do
+      {:ok, %{status: 200, body: body}} ->
+        parsed_body = parse_body(body)
 
-            cost_float =
-              prompt_tokens * @input_rate_per_token + completion_tokens * @output_rate_per_token
+        case parsed_body do
+          %{"candidates" => [%{"content" => %{"parts" => [%{"text" => json_text} | _]}} | _]} ->
+            case Jason.decode(json_text) do
+              {:ok, %{"variant_a" => a, "variant_b" => b}} ->
+                usage = Map.get(parsed_body, "usageMetadata", %{})
+                prompt_tokens = Map.get(usage, "promptTokenCount", 0)
+                completion_tokens = Map.get(usage, "candidatesTokenCount", 0)
 
-            {:ok,
-             %{
-               variant_a: a,
-               variant_b: b,
-               prompt_tokens: prompt_tokens,
-               completion_tokens: completion_tokens,
-               total_tokens: total_tokens,
-               cost: Decimal.from_float(cost_float),
-               model: @model_name
-             }}
+                total_tokens =
+                  Map.get(usage, "totalTokenCount", prompt_tokens + completion_tokens)
+
+                cost = calculate_cost(prompt_tokens, completion_tokens)
+
+                {:ok,
+                 %{
+                   variant_a: a,
+                   variant_b: b,
+                   prompt_tokens: prompt_tokens,
+                   completion_tokens: completion_tokens,
+                   total_tokens: total_tokens,
+                   cost: cost,
+                   model: @model_name
+                 }}
+
+              _ ->
+                {:error, "Failed to parse structured JSON from Gemini response"}
+            end
 
           _ ->
-            {:error, "Failed to parse structured JSON from Gemini response"}
+            {:error, "Malformed Gemini response structure"}
         end
 
       {:ok, %{status: status, body: body}} ->
@@ -89,6 +103,16 @@ defmodule FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter do
       {:error, reason} ->
         {:error, "Network request to Gemini failed: #{inspect(reason)}"}
     end
+  end
+
+  defp parse_body(body) when is_binary(body), do: Jason.decode!(body)
+  defp parse_body(body) when is_map(body), do: body
+
+  # Calculates token costs using Decimal math to avoid float precision loss
+  defp calculate_cost(prompt_tokens, completion_tokens) do
+    input_cost = Decimal.mult(Decimal.new(prompt_tokens), @input_rate)
+    output_cost = Decimal.mult(Decimal.new(completion_tokens), @output_rate)
+    Decimal.add(input_cost, output_cost)
   end
 
   defp generate_fallback_ab(content, profile) do

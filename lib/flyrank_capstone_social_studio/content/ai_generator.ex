@@ -1,9 +1,14 @@
 defmodule FlyrankCapstoneSocialStudio.Content.AiGenerator do
   @moduledoc """
-  Delegates variant generation to the configured AI provider adapter.
+  Delegates AI variant generation to the configured AI adapter.
   """
 
-  def generate_ab_variants(content, platform_name, profile) do
+  @doc """
+  Generates A/B content variants for a given post content, platform, and constraint profile.
+
+  Accepts optional `opts` (e.g. `:api_url`, `:api_key`) to pass down to the adapter.
+  """
+  def generate_ab_variants(content, platform_name, profile, opts \\ []) do
     adapter =
       Application.get_env(
         :flyrank_capstone_social_studio,
@@ -11,6 +16,6 @@ defmodule FlyrankCapstoneSocialStudio.Content.AiGenerator do
         FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter
       )
 
-    adapter.generate_ab_variants(content, platform_name, profile)
+    adapter.generate_ab_variants(content, platform_name, profile, opts)
   end
 end

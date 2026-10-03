@@ -19,7 +19,6 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
     test "dynamic configuration swap changes dispatch target without modifying business logic" do
       original_config = Application.get_env(:flyrank_capstone_social_studio, :adapters)
 
-      # Swap telegram to use MockX dynamically
       swapped_config =
         Keyword.put(
           original_config,
@@ -32,7 +31,6 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
       assert Publishing.adapter_for_platform("telegram") ==
                FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
 
-      # Restore original config
       Application.put_env(:flyrank_capstone_social_studio, :adapters, original_config)
     end
   end
@@ -44,19 +42,18 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
     test "AiGenerator resolves configured default AI adapter" do
       configured_adapter = Application.get_env(:flyrank_capstone_social_studio, :ai_adapter)
 
-      # Verifies default active adapter is set to GeminiAdapter
       assert configured_adapter == FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter
     end
 
     test "dynamic AI adapter swap changes generation target without modifying business logic" do
       original_ai_adapter = Application.get_env(:flyrank_capstone_social_studio, :ai_adapter)
 
-      # Define a lightweight Mock AI Adapter for swapping test
+      # Update TestMockAiAdapter to accept optional _opts \\ [] as 4th parameter
       defmodule TestMockAiAdapter do
         @behaviour FlyrankCapstoneSocialStudio.Ai.Provider
 
         @impl true
-        def generate_ab_variants(_content, _platform, _profile) do
+        def generate_ab_variants(_content, _platform, _profile, _opts \\ []) do
           {:ok,
            %{
              variant_a: "Swapped Mock Variant A",
@@ -71,10 +68,8 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
       end
 
       try do
-        # Dynamically swap AI adapter in Application config
         Application.put_env(:flyrank_capstone_social_studio, :ai_adapter, TestMockAiAdapter)
 
-        # Call AiGenerator and assert it routed through the swapped mock adapter
         assert {:ok, result} =
                  AiGenerator.generate_ab_variants("Sample text", "telegram", %{
                    max_length: 280,
@@ -85,7 +80,6 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
         assert result.variant_a == "Swapped Mock Variant A"
         assert result.model == "swapped-mock-ai"
       after
-        # Always restore original application config after test execution
         Application.put_env(:flyrank_capstone_social_studio, :ai_adapter, original_ai_adapter)
       end
     end

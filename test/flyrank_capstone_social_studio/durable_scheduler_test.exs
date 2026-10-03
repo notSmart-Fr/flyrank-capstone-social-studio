@@ -1,7 +1,5 @@
 defmodule FlyrankCapstoneSocialStudio.DurableSchedulerTest do
   use FlyrankCapstoneSocialStudio.DataCase
-  use Oban.Testing, repo: FlyrankCapstoneSocialStudio.Repo
-
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
   alias FlyrankCapstoneSocialStudio.Publishing.PublishAttempt
