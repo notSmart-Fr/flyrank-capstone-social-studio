@@ -78,6 +78,8 @@ sequenceDiagram
 | Grounding audit | Unsupported claims are found | Mark the returned draft map as `"rejected"` with the unsupported claims in its rejection reason | Human review can identify the unsupported assertions |
 | Grounding audit | Audit API/network error | Mark the returned draft map as `"needs_review"` with the audit failure reason | Unverified content is not returned as an approved draft |
 | Grounding audit | No API key is configured | Run the offline heuristic, which flags numbers in the variant that are absent from the source | Simple numeric claims are checked locally; this is not a full semantic audit |
+| Ingestion UI | Valid Markdown form submission | Ingest the post and navigate to its editor | The created post is persisted and the user reaches `/posts/:id` |
+| Ingestion UI | Required fields are invalid | Keep the form open and show a validation flash | No post is created; user can correct the form |
 
 ## Focused Behavior Tests
 
@@ -85,13 +87,20 @@ The tagged tests exercise the documented paths:
 
 ```sh
 mix test --only content_ingestion
+mix test --only content_ingestion_ui
 mix test --only idempotency
 mix test --only grounding
 mix test --only ai_generation
 mix test --only error_handling
 ```
 
-The `:error_handling` tag is combined with the applicable feature tag, so it can
-also be used alongside one of the feature selectors. These tests use Bypass to
-exercise HTTP success and failure responses without calling Gemini or external
-websites.
+The `:content_ingestion_ui` tag selects the LiveView form behavior tests. The
+`:error_handling` tag is combined with the applicable feature tag, so it can also
+be used alongside one of the feature selectors. For example:
+
+```sh
+mix test --only content_ingestion_ui --only error_handling
+```
+
+The HTTP behavior tests use Bypass to exercise success and failure responses
+without calling Gemini or external websites.

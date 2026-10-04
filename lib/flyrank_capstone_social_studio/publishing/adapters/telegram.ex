@@ -39,7 +39,11 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
       }
 
       # Req handles JSON encoding and content-type headers automatically via `json:`
-      case Req.post(url, json: payload, finch: FlyrankCapstoneSocialStudio.Finch, retry: false) do
+      case Req.post(url,
+             json: payload,
+             finch: [name: FlyrankCapstoneSocialStudio.Finch],
+             retry: false
+           ) do
         {:ok, %{status: 200, body: %{"ok" => true, "result" => %{"message_id" => msg_id}}}} ->
           {:ok, %{external_id: to_string(msg_id), raw_response: "Published to Telegram"}}
 
