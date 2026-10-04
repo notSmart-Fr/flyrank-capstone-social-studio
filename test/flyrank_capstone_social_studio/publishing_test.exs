@@ -3,191 +3,242 @@ defmodule FlyrankCapstoneSocialStudio.PublishingTest do
 
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
+  alias FlyrankCapstoneSocialStudio.Publishing.PublishAttempt
   alias FlyrankCapstoneSocialStudio.Publishing.Slot
+  alias FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker
 
-  describe "scheduling invariants & blocked variants" do
-    setup do
-      {:ok, post} =
-        Content.create_post(%{
-          title: "Invariants Test Post",
-          content: "Testing variant scheduling guards.",
-          source_type: "markdown"
-        })
+  setup do
+    {:ok, post} =
+      Content.create_post(%{
+        title: "Publishing Test Post",
+        content: "Behaviour tests for scheduling and dispatching.",
+        source_type: "markdown"
+      })
 
-      {:ok, approved_variant} =
-        Content.create_variant(%{
-          post_id: post.id,
-          platform: "telegram",
-          content: "Approved variant content",
-          status: "approved"
-        })
-
-      {:ok, draft_variant} =
-        Content.create_variant(%{
-          post_id: post.id,
-          platform: "mock_x",
-          content: "Draft variant content",
-          status: "draft"
-        })
-
-      {:ok, rejected_variant} =
-        Content.create_variant(%{
-          post_id: post.id,
-          platform: "mock_linkedin",
-          content: "Rejected variant content",
-          status: "rejected"
-        })
-
-      %{
-        approved_variant: approved_variant,
-        draft_variant: draft_variant,
-        rejected_variant: rejected_variant
-      }
-    end
-
-    test "refuses to schedule a draft variant", %{draft_variant: variant} do
-      params = %{
-        "scheduled_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
-        "idempotency_key" => "key-draft-#{:erlang.unique_integer([:positive])}"
-      }
-
-      # Update test lines 54 & 63 in publishing_test.exs:
-      assert {:error, :unapproved_variant} = Publishing.schedule_variant(variant, params)
-    end
-
-    test "refuses to schedule a blocked/rejected variant", %{rejected_variant: variant} do
-      params = %{
-        "scheduled_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
-        "idempotency_key" => "key-rejected-#{:erlang.unique_integer([:positive])}"
-      }
-
-      assert {:error, :unapproved_variant} = Publishing.schedule_variant(variant, params)
-    end
-
-    test "allows scheduling an approved variant", %{approved_variant: variant} do
-      params = %{
-        "scheduled_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
-        "idempotency_key" => "key-approved-#{:erlang.unique_integer([:positive])}"
-      }
-
-      assert {:ok, %Slot{}} = Publishing.schedule_variant(variant, params)
-    end
+    %{post: post}
   end
 
-  describe "duplicate publish & idempotency" do
-    setup do
-      {:ok, post} =
-        Content.create_post(%{
-          title: "Idempotency Test Post",
-          content: "Testing duplicate publishing.",
-          source_type: "markdown"
-        })
+  defp approved_variant!(post, platform \\ "mock_x") do
+    {:ok, variant} =
+      Content.create_variant(%{
+        post_id: post.id,
+        platform: platform,
+        content: "Approved #{platform} content #tech",
+        status: "approved"
+      })
 
-      {:ok, variant} =
-        Content.create_variant(%{
-          post_id: post.id,
-          platform: "mock_x",
-          content: "Idempotency test content",
-          status: "approved"
-        })
+    variant
+  end
 
-      {:ok, slot} =
-        Publishing.schedule_variant(variant, %{
-          "scheduled_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
-          "status" => "pending",
-          "idempotency_key" => "key-idempotent-#{:erlang.unique_integer([:positive])}"
-        })
+  defp scheduled_slot!(variant, key \\ nil) do
+    params = %{"scheduled_at" => DateTime.to_iso8601(DateTime.utc_now())}
+    params = if key, do: Map.put(params, "idempotency_key", key), else: params
 
-      %{variant: variant, slot: slot}
+    {:ok, slot} = Publishing.schedule_variant(variant, params)
+    slot
+  end
+
+  defp attempts_for(slot), do: Repo.all(from pa in PublishAttempt, where: pa.slot_id == ^slot.id)
+
+  describe "Scheduling Behavior: slots, instant mode & auto spacing" do
+    @describetag :publishing
+    @describetag :scheduling
+
+    test "creates a pending slot and enqueues exactly one Oban job", %{post: post} do
+      variant = approved_variant!(post)
+
+      assert {:ok, %Slot{status: "pending"} = slot} =
+               Publishing.schedule_variant(variant, %{
+                 "scheduled_at" =>
+                   DateTime.utc_now() |> DateTime.add(3600, :second) |> DateTime.to_iso8601()
+               })
+
+      assert_enqueued(worker: PublishWorker, args: %{"slot_id" => slot.id})
+      assert [_single_job] = all_enqueued(worker: PublishWorker)
     end
 
-    test "short-circuits gracefully when slot is already published", %{slot: slot} do
-      # First dispatch marks it published
-      assert {:ok, _attempt} = Publishing.dispatch_slot(slot)
+    test "instant mode (enqueue: false) creates the slot without queueing a job", %{post: post} do
+      variant = approved_variant!(post)
 
-      # Reload slot to fetch status = "published"
-      published_slot = Repo.get!(Slot, slot.id)
+      assert {:ok, %Slot{}} =
+               Publishing.schedule_variant(
+                 variant,
+                 %{"scheduled_at" => DateTime.to_iso8601(DateTime.utc_now())},
+                 enqueue: false
+               )
 
-      # Second dispatch short-circuits safely
-      assert {:ok, %{status: :already_published}} = Publishing.dispatch_slot(published_slot)
+      refute_enqueued(worker: PublishWorker)
     end
 
-    test "prevents creating duplicate slots with the same idempotency key", %{variant: variant} do
-      key = "duplicate-key-999"
+    test "scheduling a variant that already has a slot returns it instead of duplicating", %{
+      post: post
+    } do
+      variant = approved_variant!(post)
+      first = scheduled_slot!(variant)
+      second = scheduled_slot!(variant)
 
-      params = %{
-        "scheduled_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
-        "idempotency_key" => key
-      }
+      assert first.id == second.id
+      assert [_single_slot] = Repo.all(from s in Slot, where: s.variant_id == ^variant.id)
+    end
 
-      # First schedule succeeds
-      assert {:ok, %Slot{}} = Publishing.schedule_variant(variant, params)
+    test "auto mode places the next slot for the same platform two hours after the last", %{
+      post: post
+    } do
+      first_variant = approved_variant!(post, "mock_x")
+      second_variant = approved_variant!(post, "mock_x")
 
-      # Second schedule with identical idempotency key fails DB unique constraint
-      assert {:error, changeset} = Publishing.schedule_variant(variant, params)
+      assert {:ok, first} = Publishing.schedule_variant(first_variant, %{}, mode: :auto)
+      assert {:ok, second} = Publishing.schedule_variant(second_variant, %{}, mode: :auto)
+
+      assert DateTime.diff(second.scheduled_at, first.scheduled_at, :second) == 2 * 3600
+    end
+
+    @tag :error_handling
+    test "returns a changeset error for a past scheduled_at", %{post: post} do
+      variant = approved_variant!(post)
+
+      past = DateTime.utc_now() |> DateTime.add(-3600, :second) |> DateTime.to_iso8601()
+
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Publishing.schedule_variant(variant, %{"scheduled_at" => past})
+
+      assert "must be in the future" in errors_on(changeset).scheduled_at
+      refute_enqueued(worker: PublishWorker)
+    end
+
+    @tag :error_handling
+    test "rejects a duplicate idempotency key with a uniqueness error", %{post: post} do
+      variant = approved_variant!(post)
+      _first = scheduled_slot!(variant, "duplicate-key-999")
+
+      assert {:error, changeset} =
+               Publishing.schedule_variant(variant, %{
+                 "scheduled_at" => DateTime.to_iso8601(DateTime.utc_now()),
+                 "idempotency_key" => "duplicate-key-999"
+               })
+
       assert "has already been taken" in errors_on(changeset).idempotency_key
     end
+
+    @tag :error_handling
+    test "a failed slot is reset to pending and re-enqueued when rescheduled", %{post: post} do
+      variant = approved_variant!(post)
+      slot = scheduled_slot!(variant)
+
+      assert {:error, _attempt} = Publishing.dispatch_slot(slot, simulate_failure: true)
+      assert Publishing.get_slot!(slot.id).status == "failed"
+
+      retried = scheduled_slot!(variant)
+
+      assert retried.id == slot.id
+      assert retried.status == "pending"
+    end
   end
 
-  describe "publish history & audit logs" do
-    setup do
-      {:ok, post} =
-        Content.create_post(%{
-          title: "Audit History Test Post",
-          content: "Testing history audit log visibility.",
-          source_type: "markdown"
-        })
+  describe "Dispatch Behavior: adapters, idempotency & concurrency" do
+    @describetag :publishing
+    @describetag :dispatch
 
-      {:ok, variant} =
-        Content.create_variant(%{
-          post_id: post.id,
-          platform: "mock_x",
-          content: "Audit test content #tech",
-          status: "approved"
-        })
-
-      {:ok, slot} =
-        Publishing.schedule_variant(variant, %{
-          "scheduled_at" => DateTime.utc_now() |> DateTime.to_iso8601(),
-          "status" => "pending",
-          "idempotency_key" => "key-audit-#{:erlang.unique_integer([:positive])}"
-        })
-
-      %{variant: variant, slot: slot}
+    setup %{post: post} do
+      variant = approved_variant!(post)
+      %{variant: variant, slot: scheduled_slot!(variant)}
     end
 
-    test "list_history/0 records and preloads successful publish attempts", %{slot: slot} do
+    test "a successful dispatch records one success attempt and publishes slot and variant", %{
+      slot: slot,
+      variant: variant
+    } do
+      assert {:ok, %PublishAttempt{status: "success"} = attempt} = Publishing.dispatch_slot(slot)
+
+      assert attempt.external_post_id =~ "x-tweet-"
+      assert Publishing.get_slot!(slot.id).status == "published"
+      assert Content.get_variant!(variant.id).status == "published"
+    end
+
+    test "re-dispatching a published slot short-circuits without a new attempt", %{slot: slot} do
+      assert {:ok, %PublishAttempt{}} = Publishing.dispatch_slot(slot)
+
+      published_slot = Publishing.get_slot!(slot.id)
+
+      assert {:ok, %{status: :already_published}} = Publishing.dispatch_slot(published_slot)
+      assert [_single_attempt] = attempts_for(slot)
+    end
+
+    test "re-dispatching a stale pending slot returns the existing attempt", %{slot: slot} do
+      assert {:ok, %PublishAttempt{} = first} = Publishing.dispatch_slot(slot)
+
+      # `slot` is the stale in-memory struct that still says "pending"
+      assert {:ok, %PublishAttempt{} = second} = Publishing.dispatch_slot(slot)
+
+      assert first.id == second.id
+    end
+
+    @tag :error_handling
+    test "a failing adapter records a failure attempt and marks the slot failed", %{slot: slot} do
+      assert {:error, %PublishAttempt{status: "failure"} = attempt} =
+               Publishing.dispatch_slot(slot, simulate_failure: true)
+
+      assert attempt.error_message =~ "Simulated X platform rate limit"
+      assert Publishing.get_slot!(slot.id).status == "failed"
+    end
+
+    @tag :error_handling
+    test "an in-flight claim rejects another dispatch before the adapter is called", %{
+      slot: slot
+    } do
+      {:ok, _in_flight} =
+        Publishing.create_publish_attempt(%{
+          slot_id: slot.id,
+          adapter_name: "InFlight",
+          status: "pending"
+        })
+
+      assert {:error, :concurrent_request_in_flight} = Publishing.dispatch_slot(slot)
+      assert [_only_the_claim] = attempts_for(slot)
+    end
+
+    @tag :error_handling
+    test "simultaneous dispatches publish at most once", %{slot: slot} do
+      results =
+        Task.await_many([
+          Task.async(fn -> Publishing.dispatch_slot(slot) end),
+          Task.async(fn -> Publishing.dispatch_slot(slot) end)
+        ])
+
+      assert Enum.any?(results, &match?({:ok, %PublishAttempt{status: "success"}}, &1))
+      assert [%PublishAttempt{status: "success"}] = attempts_for(slot)
+    end
+  end
+
+  describe "Audit History Behavior: attempts are recorded and preloaded" do
+    @describetag :publishing
+    @describetag :publish_history
+
+    setup %{post: post} do
+      variant = approved_variant!(post)
+      %{slot: scheduled_slot!(variant)}
+    end
+
+    test "list_history/0 returns successful attempts with slot and variant preloaded", %{
+      slot: slot
+    } do
       assert {:ok, attempt} = Publishing.dispatch_slot(slot)
 
-      history = Publishing.list_history()
-      assert history != []
+      recorded = Enum.find(Publishing.list_history(), &(&1.id == attempt.id))
 
-      recorded = Enum.find(history, &(&1.id == attempt.id))
-      assert recorded != nil
       assert recorded.status == "success"
-      assert recorded.external_post_id =~ "x-tweet-"
       assert recorded.slot.id == slot.id
       assert recorded.slot.variant.id == slot.variant_id
     end
 
-    test "list_history/0 records failed publish attempts with error messages", %{slot: slot} do
-      assert {:error, _reason} = Publishing.dispatch_slot(slot, simulate_failure: true)
+    @tag :error_handling
+    test "list_history/0 returns failed attempts with their error message", %{slot: slot} do
+      assert {:error, _attempt} = Publishing.dispatch_slot(slot, simulate_failure: true)
 
-      history = Publishing.list_history()
-      failed_attempt = Enum.find(history, &(&1.slot_id == slot.id))
+      failed = Enum.find(Publishing.list_history(), &(&1.slot_id == slot.id))
 
-      assert failed_attempt != nil
-      assert failed_attempt.status == "failure"
-      assert failed_attempt.error_message =~ "Simulated X platform rate limit"
+      assert failed.status == "failure"
+      assert failed.error_message =~ "Simulated X platform rate limit"
     end
-  end
-
-  test "slot changeset rejects past scheduled_at timestamps" do
-    past_time = DateTime.utc_now() |> DateTime.add(-3600, :second)
-    attrs = %{scheduled_at: past_time, status: "pending", variant_id: 1, idempotency_key: "k1"}
-
-    changeset = Slot.changeset(%Slot{}, attrs)
-    refute changeset.valid?
-    assert "must be in the future" in errors_on(changeset).scheduled_at
   end
 end

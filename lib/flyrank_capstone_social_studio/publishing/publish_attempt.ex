@@ -40,6 +40,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.PublishAttempt do
       ])
       |> put_change(:slot_id, Map.get(attrs, :slot_id, publish_attempt.slot_id))
       |> validate_required([:adapter_name, :status])
+      |> unique_constraint(:slot_id, name: :publish_attempts_active_slot_index)
 
     case get_field(changeset, :status) do
       "success" -> validate_required(changeset, [:external_post_id])

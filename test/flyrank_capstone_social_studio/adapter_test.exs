@@ -4,7 +4,70 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
   alias FlyrankCapstoneSocialStudio.Publishing
   alias FlyrankCapstoneSocialStudio.Content.AiGenerator
 
-  describe "Phase 4 Gate: SocialPublisher Interface & Adapter Seam" do
+  describe "Adapter Behavior: SocialPublisher implementations" do
+    @describetag :publishing
+    @describetag :adapters
+
+    test "MockX returns a tweet id and echoes the content" do
+      assert {:ok, %{external_id: "x-tweet-" <> _, raw_response: response}} =
+               FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX.publish("Hello X")
+
+      assert response =~ "Hello X"
+    end
+
+    test "MockLinkedIn returns a share urn" do
+      assert {:ok, %{external_id: "urn:li:share:" <> _}} =
+               FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn.publish("Hello LI")
+    end
+
+    @tag :error_handling
+    test "mock adapters return an error string when failure is simulated" do
+      assert {:error, "Simulated X platform" <> _} =
+               FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX.publish("x",
+                 simulate_failure: true
+               )
+
+      assert {:error, "Simulated LinkedIn" <> _} =
+               FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn.publish("x",
+                 simulate_failure: true
+               )
+    end
+
+    @tag :error_handling
+    test "Telegram returns an explicit error when credentials are missing" do
+      env_keys = ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]
+      app_keys = [:telegram_bot_token, :telegram_chat_id]
+      saved_env = Map.new(env_keys, &{&1, System.get_env(&1)})
+
+      saved_app =
+        Map.new(app_keys, &{&1, Application.get_env(:flyrank_capstone_social_studio, &1)})
+
+      Enum.each(env_keys, &System.delete_env/1)
+      Enum.each(app_keys, &Application.delete_env(:flyrank_capstone_social_studio, &1))
+
+      on_exit(fn ->
+        Enum.each(saved_env, fn
+          {key, nil} -> System.delete_env(key)
+          {key, value} -> System.put_env(key, value)
+        end)
+
+        Enum.each(saved_app, fn
+          {_key, nil} -> :ok
+          {key, value} -> Application.put_env(:flyrank_capstone_social_studio, key, value)
+        end)
+      end)
+
+      assert {:error, message} =
+               FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram.publish("Hello")
+
+      assert message =~ "Telegram credentials are missing"
+    end
+  end
+
+  describe "Publishing Adapter Seam" do
+    @describetag :publishing
+    @describetag :adapters
+
     test "adapter_for_platform/1 resolves correct modules from application config" do
       assert Publishing.adapter_for_platform("telegram") ==
                FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram

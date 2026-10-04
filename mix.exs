@@ -20,11 +20,13 @@ defmodule FlyrankCapstoneSocialStudio.MixProject do
       docs: [
         main: "content_ingestion_and_grounding",
         extras: [
-          "guides/content_ingestion_and_grounding.md"
+          "guides/content_ingestion_and_grounding.md",
+          "guides/publishing_and_dispatch.md"
         ],
         groups_for_extras: [
           "Architecture & Guides": [
-            "guides/content_ingestion_and_grounding.md"
+            "guides/content_ingestion_and_grounding.md",
+            "guides/publishing_and_dispatch.md"
           ]
         ],
         groups_for_modules: [

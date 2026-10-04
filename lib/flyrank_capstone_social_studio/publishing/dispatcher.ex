@@ -55,8 +55,22 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
       status: "pending"
     }
 
-    {:ok, attempt} = Publishing.create_publish_attempt(attempt_attrs)
+    # The pending attempt acts as a claim: the partial unique index rejects a
+    # second concurrent claim before the adapter is ever called.
+    case Publishing.create_publish_attempt(attempt_attrs) do
+      {:ok, attempt} ->
+        publish_with_adapter(adapter, slot, variant, attempt, opts)
 
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if Keyword.has_key?(changeset.errors, :slot_id) do
+          {:error, :concurrent_request_in_flight}
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  defp publish_with_adapter(adapter, slot, variant, attempt, opts) do
     case adapter.publish(variant.content, opts) do
       {:ok, %{external_id: ext_id, raw_response: response}} ->
         {:ok, updated_attempt} =

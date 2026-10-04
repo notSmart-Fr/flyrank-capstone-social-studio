@@ -4,7 +4,10 @@ defmodule FlyrankCapstoneSocialStudio.ReviewWorkflowTest do
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
 
-  describe "Phase 3 Gate: Review Workflow Domain Protection" do
+  describe "Review Gate Behavior: only approved variants can be scheduled" do
+    @describetag :publishing
+    @describetag :review_gate
+
     setup do
       {:ok, post} =
         Content.create_post(%{
@@ -24,6 +27,7 @@ defmodule FlyrankCapstoneSocialStudio.ReviewWorkflowTest do
       %{post: post, variant: variant}
     end
 
+    @tag :error_handling
     test "refuses to schedule a variant in draft status", %{variant: variant} do
       slot_params = %{
         "scheduled_at" =>
@@ -35,6 +39,7 @@ defmodule FlyrankCapstoneSocialStudio.ReviewWorkflowTest do
       assert {:error, :unapproved_variant} = Publishing.schedule_variant(variant, slot_params)
     end
 
+    @tag :error_handling
     test "refuses to schedule a rejected variant", %{variant: variant} do
       {:ok, rejected_variant} = Content.reject_variant(variant, "Tone inaccurate")
       assert rejected_variant.status == "rejected"
@@ -67,7 +72,11 @@ defmodule FlyrankCapstoneSocialStudio.ReviewWorkflowTest do
     end
   end
 
-  describe "Phase 3 Gate: HTTP 4xx API Enforcement" do
+  describe "Review Gate Behavior: HTTP 403 for unapproved variants" do
+    @describetag :publishing
+    @describetag :review_gate
+    @describetag :error_handling
+
     setup do
       {:ok, post} =
         Content.create_post(%{
