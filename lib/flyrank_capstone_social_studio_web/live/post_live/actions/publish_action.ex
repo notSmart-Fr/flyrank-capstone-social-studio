@@ -46,6 +46,9 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishAction do
          {:ok, slot} <- schedule_variant(approved_variant, scheduled_at, mode) do
       publish_or_schedule(socket, approved_variant, slot, mode, scheduled_at)
     else
+      {:error, {:not_publishable, status}} ->
+        publish_error(socket, "Cannot publish a #{status} variant. Review it first.")
+
       {:error, reason} ->
         publish_error(socket, "Publishing failed: #{inspect(reason)}")
     end
@@ -118,6 +121,9 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishAction do
      |> put_flash(:error, message)}
   end
 
+  # Publishing a draft is the reviewer's explicit approval; rejected and
+  # already-published variants must never be re-approved from the UI.
   defp ensure_approved(%{status: "approved"} = variant), do: {:ok, variant}
-  defp ensure_approved(variant), do: Content.approve_variant(variant)
+  defp ensure_approved(%{status: "draft"} = variant), do: Content.approve_variant(variant)
+  defp ensure_approved(%{status: status}), do: {:error, {:not_publishable, status}}
 end

@@ -64,6 +64,73 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
     end
   end
 
+  describe "Telegram HTTP Behavior (Bypass)" do
+    @describetag :publishing
+    @describetag :adapters
+    @describetag :error_handling
+
+    alias FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram
+
+    setup do
+      bypass = Bypass.open()
+      original_url = Application.get_env(:flyrank_capstone_social_studio, :telegram_base_url)
+      saved_env = Map.new(["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"], &{&1, System.get_env(&1)})
+
+      Application.put_env(
+        :flyrank_capstone_social_studio,
+        :telegram_base_url,
+        "http://localhost:#{bypass.port}"
+      )
+
+      System.put_env("TELEGRAM_BOT_TOKEN", "test-token")
+      System.put_env("TELEGRAM_CHAT_ID", "12345")
+
+      on_exit(fn ->
+        if original_url do
+          Application.put_env(:flyrank_capstone_social_studio, :telegram_base_url, original_url)
+        else
+          Application.delete_env(:flyrank_capstone_social_studio, :telegram_base_url)
+        end
+
+        Enum.each(saved_env, fn
+          {key, nil} -> System.delete_env(key)
+          {key, value} -> System.put_env(key, value)
+        end)
+      end)
+
+      %{bypass: bypass}
+    end
+
+    test "posts the expected payload and returns the message id", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "POST", "/bottest-token/sendMessage", fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        assert %{"chat_id" => "12345", "text" => "Hello TG"} = Jason.decode!(body)
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(200, Jason.encode!(%{ok: true, result: %{message_id: 42}}))
+      end)
+
+      assert {:ok, %{external_id: "42"}} = Telegram.publish("Hello TG")
+    end
+
+    test "rate limiting (HTTP 429) is returned as an error", %{bypass: bypass} do
+      Bypass.expect_once(bypass, "POST", "/bottest-token/sendMessage", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(429, Jason.encode!(%{ok: false, description: "Too Many Requests"}))
+      end)
+
+      assert {:error, "Telegram API HTTP 429" <> _} = Telegram.publish("Hello TG")
+    end
+
+    test "a network failure is returned as an error", %{bypass: bypass} do
+      Bypass.down(bypass)
+
+      assert {:error, "Network failure" <> _} = Telegram.publish("Hello TG")
+    end
+  end
+
   describe "Publishing Adapter Seam" do
     @describetag :publishing
     @describetag :adapters

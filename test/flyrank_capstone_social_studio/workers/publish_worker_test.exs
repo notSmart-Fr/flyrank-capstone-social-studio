@@ -86,5 +86,21 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorkerTest do
       assert [%PublishAttempt{status: "failure", error_message: "Simulated adapter outage"}] =
                Repo.all(from pa in PublishAttempt, where: pa.slot_id == ^slot.id)
     end
+
+    test "an in-flight claim cancels the job silently without a failure broadcast", %{
+      slot: slot
+    } do
+      {:ok, _claim} =
+        Publishing.create_publish_attempt(%{
+          slot_id: slot.id,
+          adapter_name: "InFlight",
+          status: "pending"
+        })
+
+      assert {:cancel, :concurrent_request_in_flight} =
+               perform_job(PublishWorker, %{"slot_id" => slot.id})
+
+      refute_receive {:slot_failed, _, _}
+    end
   end
 end

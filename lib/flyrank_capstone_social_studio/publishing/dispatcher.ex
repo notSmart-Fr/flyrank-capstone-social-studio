@@ -71,7 +71,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
   end
 
   defp publish_with_adapter(adapter, slot, variant, attempt, opts) do
-    case adapter.publish(variant.content, opts) do
+    case call_adapter_safely(adapter, variant.content, opts) do
       {:ok, %{external_id: ext_id, raw_response: response}} ->
         {:ok, updated_attempt} =
           Publishing.update_publish_attempt(attempt, %{
@@ -97,5 +97,15 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
 
         {:error, updated_attempt}
     end
+  end
+
+  # Adapter crashes become ordinary failures so the pending claim is always
+  # resolved and the slot can be retried.
+  defp call_adapter_safely(adapter, content, opts) do
+    adapter.publish(content, opts)
+  rescue
+    e -> {:error, "Adapter exception: #{Exception.message(e)}"}
+  catch
+    kind, value -> {:error, "Adapter #{kind}: #{inspect(value)}"}
   end
 end

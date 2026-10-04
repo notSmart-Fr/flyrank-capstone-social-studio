@@ -48,13 +48,14 @@ sequenceDiagram
         Disp->>Repo: Insert pending attempt
         Repo-->>Disp: unique violation
         Disp-->>Oban: {:error, :concurrent_request_in_flight}
+        Oban-->>Oban: {:cancel, ...} (no broadcast, no retry)
     else Free to claim
         Disp->>Repo: Insert pending attempt (claim)
         Disp->>Adapter: publish(variant)
         alt Adapter succeeds
             Disp->>Repo: Attempt success, slot and variant published
             Oban->>PubSub: {:slot_published, slot}
-        else Adapter fails
+        else Adapter fails or raises
             Disp->>Repo: Attempt failure, slot failed
             Oban->>PubSub: {:slot_failed, slot, message}
             Oban-->>Oban: {:error, message} (retry, max 3)
@@ -75,26 +76,26 @@ sequenceDiagram
 | Dispatch | Slot already published | Short-circuit | `{:ok, %{status: :already_published}}` |
 | Dispatch | Success attempt already recorded | Return it | `{:ok, attempt}`, adapter not called |
 | Dispatch | Concurrent dispatch of the same slot | Partial unique index on the pending claim | One publishes, the other gets `{:error, :concurrent_request_in_flight}` |
+| Adapter | Adapter raises or throws | Dispatcher rescues it and resolves the claim | Attempt `failure` ("Adapter exception: ..."), slot `failed`, retryable |
 | Adapter | Adapter returns an error | Attempt `failure`, slot `failed` | `{:error, attempt}` |
 | Adapter | Telegram credentials missing | Explicit error from the adapter | Error string, slot `failed` |
+| Worker | Concurrent claim | Job cancelled silently | `{:cancel, :concurrent_request_in_flight}`; no `:slot_failed`, no retry |
 | Worker | Dispatch error | Broadcast `:slot_failed` and return `{:error, msg}` | Oban retries, up to 3 attempts |
 | Worker | Oban restarts a finished job | Dispatcher short-circuit | No duplicate attempt |
 | UI | Instant publish succeeds | Flash info | "Successfully published to MOCK_X" |
 | UI | Scheduled publish | Flash info | "Post scheduled for Jan 01, 2099 at 10:30 UTC" |
 | UI | Unparseable time | Falls back to now | No crash |
 | UI | Adapter failure | Flash error | "Dispatch failed", slot `failed` |
+| UI | Rejected or published variant | Refused before any slot is created | Flash error "Cannot publish a rejected variant. Review it first." |
 | UI | Scheduling error | Flash error | "Publishing failed" |
 
-## Known Limitations
+## Design Notes
 
-- If an adapter raises (instead of returning an error), the attempt stays `pending`
-  and the active-slot index blocks retries until it is cleaned up.
-- `PublishWorker` reports `:concurrent_request_in_flight` like any other error and
-  broadcasts `:slot_failed`.
-- `PublishAction.ensure_approved` approves any non-approved variant, so the inspector
-  publish path bypasses the review gate.
-- The Telegram adapter URL is fixed, so only its missing-credentials path is tested.
-
+- A draft published from the inspector counts as the reviewer's explicit approval and is
+  approved on the fly. Rejected and already-published variants are refused.
+- The Telegram base URL comes from `config :flyrank_capstone_social_studio,
+  :telegram_base_url` (default `https://api.telegram.org`), so tests point it at Bypass.
+  The adapter does not retry HTTP calls itself; Oban owns retries.
 ## Focused Behavior Tests
 
 Run the behavior tests by tag:
@@ -106,7 +107,7 @@ mix test --only scheduling        # slots, jobs, auto spacing, past times
 mix test --only dispatch          # idempotency, claims, concurrency
 mix test --only publish_worker    # Oban worker and PubSub broadcasts
 mix test --only publish_history   # audit log
-mix test --only adapters          # adapter seam and mock adapters
+mix test --only adapters          # adapter seam, mock adapters, Telegram via Bypass
 mix test --only publish_ui        # inspector publish modal
 mix test --only error_handling    # failure paths only
 ```

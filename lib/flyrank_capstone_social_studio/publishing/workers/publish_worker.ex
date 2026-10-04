@@ -10,7 +10,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker do
   alias FlyrankCapstoneSocialStudio.PubSub
 
   @impl Oban.Worker
-  @spec perform(Oban.Job.t()) :: :ok | {:error, binary()}
+  @spec perform(Oban.Job.t()) :: :ok | {:error, binary()} | {:cancel, atom()}
   def perform(%Oban.Job{args: %{"slot_id" => slot_id}}) do
     Logger.info("⚙️ [PUBLISH WORKER] Starting execution for slot_id: #{slot_id}")
 
@@ -30,6 +30,10 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker do
         Phoenix.PubSub.broadcast(PubSub, "post:#{slot.variant.post_id}", {:slot_published, slot})
 
         :ok
+
+      {:error, :concurrent_request_in_flight} ->
+        Logger.info("⏭️ [PUBLISH WORKER] Slot #{slot_id} is being published by another job")
+        {:cancel, :concurrent_request_in_flight}
 
       {:error, reason} ->
         error_msg = extract_error_message(reason)

@@ -101,6 +101,32 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishActionTest do
       assert slot_for(variant).status == "failed"
     end
 
+    test "a rejected variant cannot be published and stays rejected", %{
+      socket: socket,
+      variant: variant
+    } do
+      {:ok, rejected} = Content.update_variant(variant, %{status: "rejected"})
+      socket = put_in(socket.assigns.current_variant, rejected)
+
+      assert {:noreply, socket} = PublishAction.confirm_publish(socket, %{"mode" => "now"})
+
+      assert socket.assigns.flash["error"] =~ "Cannot publish a rejected variant"
+      assert Content.get_variant!(variant.id).status == "rejected"
+      assert Repo.all(from s in Slot, where: s.variant_id == ^variant.id) == []
+    end
+
+    test "an already published variant cannot be published again", %{
+      socket: socket,
+      variant: variant
+    } do
+      {:ok, published} = Content.update_variant(variant, %{status: "published"})
+      socket = put_in(socket.assigns.current_variant, published)
+
+      assert {:noreply, socket} = PublishAction.confirm_publish(socket, %{"mode" => "now"})
+
+      assert socket.assigns.flash["error"] =~ "Cannot publish a published variant"
+    end
+
     test "a past scheduled time flashes 'Publishing failed' and closes the modal", %{
       socket: socket
     } do

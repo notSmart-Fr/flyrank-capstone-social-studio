@@ -22,7 +22,14 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
         Application.get_env(:flyrank_capstone_social_studio, :telegram_chat_id)
 
     if token && chat_id do
-      url = "https://api.telegram.org/bot#{token}/sendMessage"
+      base_url =
+        Application.get_env(
+          :flyrank_capstone_social_studio,
+          :telegram_base_url,
+          "https://api.telegram.org"
+        )
+
+      url = "#{base_url}/bot#{token}/sendMessage"
 
       payload = %{
         chat_id: chat_id,
@@ -32,7 +39,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
       }
 
       # Req handles JSON encoding and content-type headers automatically via `json:`
-      case Req.post(url, json: payload, finch: FlyrankCapstoneSocialStudio.Finch) do
+      case Req.post(url, json: payload, finch: FlyrankCapstoneSocialStudio.Finch, retry: false) do
         {:ok, %{status: 200, body: %{"ok" => true, "result" => %{"message_id" => msg_id}}}} ->
           {:ok, %{external_id: to_string(msg_id), raw_response: "Published to Telegram"}}
 

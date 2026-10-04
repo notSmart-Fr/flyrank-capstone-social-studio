@@ -6,6 +6,7 @@ defmodule FlyrankCapstoneSocialStudio.PublishingTest do
   alias FlyrankCapstoneSocialStudio.Publishing.PublishAttempt
   alias FlyrankCapstoneSocialStudio.Publishing.Slot
   alias FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker
+  alias FlyrankCapstoneSocialStudio.Test.{CrashingPublisher, FailingPublisher}
 
   setup do
     {:ok, post} =
@@ -195,6 +196,29 @@ defmodule FlyrankCapstoneSocialStudio.PublishingTest do
 
       assert {:error, :concurrent_request_in_flight} = Publishing.dispatch_slot(slot)
       assert [_only_the_claim] = attempts_for(slot)
+    end
+
+    @tag :error_handling
+    test "an adapter that raises is recorded as a failure and the slot stays retryable", %{
+      slot: slot
+    } do
+      FailingPublisher.swap_adapter!(:mock_x, CrashingPublisher)
+
+      assert {:error, %PublishAttempt{status: "failure"} = attempt} =
+               Publishing.dispatch_slot(slot)
+
+      assert attempt.error_message =~ "Adapter exception: boom from adapter"
+      assert Publishing.get_slot!(slot.id).status == "failed"
+
+      # The claim is released, so a later retry with a healthy adapter publishes
+      FailingPublisher.swap_adapter!(
+        :mock_x,
+        FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX
+      )
+
+      retry_slot = Publishing.get_slot!(slot.id)
+
+      assert {:ok, %PublishAttempt{status: "success"}} = Publishing.dispatch_slot(retry_slot)
     end
 
     @tag :error_handling
