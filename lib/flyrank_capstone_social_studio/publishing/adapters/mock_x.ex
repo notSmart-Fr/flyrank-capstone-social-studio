@@ -1,4 +1,8 @@
 defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.MockX do
+  @moduledoc """
+  Simulates publishing posts to X for development and testing.
+  """
+
   @behaviour FlyrankCapstoneSocialStudio.Publishing.SocialPublisher
 
   @impl true

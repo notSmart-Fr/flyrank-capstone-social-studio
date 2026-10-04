@@ -40,80 +40,82 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishAction do
     variant_id = socket.assigns[:publishing_variant_id] || socket.assigns.current_variant.id
     variant = Content.get_variant!(variant_id)
     mode = Map.get(params, "mode") || Map.get(params, "value") || "now"
-
-    scheduled_at =
-      case mode do
-        "scheduled" ->
-          case Map.get(params, "scheduled_at") do
-            nil ->
-              DateTime.utc_now()
-
-            dt_str ->
-              case DateTime.from_iso8601("#{dt_str}:00Z") do
-                {:ok, dt, _offset} -> dt
-                _ -> DateTime.utc_now()
-              end
-          end
-
-        _now ->
-          DateTime.utc_now()
-      end
+    scheduled_at = scheduled_at(mode, params)
 
     with {:ok, approved_variant} <- ensure_approved(variant),
-         {:ok, slot} <-
-           Publishing.schedule_variant(approved_variant, %{scheduled_at: scheduled_at},
-             mode: :manual,
-             enqueue: mode != "now"
-           ) do
-      if mode == "now" do
-        # Instant mode: Dispatch immediately
-        case Publishing.dispatch_slot(slot) do
-          {:ok, _attempt} ->
-            post = PostQuery.get_post_details(socket.assigns.post.id)
+         {:ok, slot} <- schedule_variant(approved_variant, scheduled_at, mode) do
+      publish_or_schedule(socket, approved_variant, slot, mode, scheduled_at)
+    else
+      {:error, reason} ->
+        publish_error(socket, "Publishing failed: #{inspect(reason)}")
+    end
+  end
 
-            updated_variant =
-              Enum.find(post.variants, &(&1.id == approved_variant.id)) || approved_variant
+  defp scheduled_at("scheduled", params) do
+    case Map.get(params, "scheduled_at") do
+      nil -> DateTime.utc_now()
+      dt_str -> parse_scheduled_at(dt_str)
+    end
+  end
 
-            {:noreply,
-             socket
-             |> assign(:post, post)
-             |> assign(:current_variant, updated_variant)
-             |> assign(:show_schedule_modal, false)
-             |> assign(:publishing_variant_id, nil)
-             |> put_flash(
-               :info,
-               "🚀 Successfully published to #{String.upcase(approved_variant.platform)}!"
-             )}
+  defp scheduled_at(_mode, _params), do: DateTime.utc_now()
 
-          {:error, reason} ->
-            {:noreply,
-             socket
-             |> assign(:show_schedule_modal, false)
-             |> assign(:publishing_variant_id, nil)
-             |> put_flash(:error, "Dispatch failed: #{inspect(reason)}")}
-        end
-      else
-        # Scheduled mode: Queue for Oban/background runner
+  defp parse_scheduled_at(dt_str) do
+    case DateTime.from_iso8601("#{dt_str}:00Z") do
+      {:ok, dt, _offset} -> dt
+      _ -> DateTime.utc_now()
+    end
+  end
+
+  defp schedule_variant(variant, scheduled_at, mode) do
+    Publishing.schedule_variant(variant, %{scheduled_at: scheduled_at},
+      mode: :manual,
+      enqueue: mode != "now"
+    )
+  end
+
+  defp publish_or_schedule(socket, variant, slot, "now", _scheduled_at) do
+    case Publishing.dispatch_slot(slot) do
+      {:ok, _attempt} ->
         post = PostQuery.get_post_details(socket.assigns.post.id)
+        updated_variant = Enum.find(post.variants, &(&1.id == variant.id)) || variant
 
         {:noreply,
          socket
          |> assign(:post, post)
-         |> assign(:show_schedule_modal, false)
-         |> assign(:publishing_variant_id, nil)
-         |> put_flash(
-           :info,
-           "📅 Post scheduled for #{Calendar.strftime(scheduled_at, "%b %d, %Y at %H:%M UTC")}!"
-         )}
-      end
-    else
+         |> assign(:current_variant, updated_variant)
+         |> close_publish_modal()
+         |> put_flash(:info, "🚀 Successfully published to #{String.upcase(variant.platform)}!")}
+
       {:error, reason} ->
-        {:noreply,
-         socket
-         |> assign(:show_schedule_modal, false)
-         |> assign(:publishing_variant_id, nil)
-         |> put_flash(:error, "Publishing failed: #{inspect(reason)}")}
+        publish_error(socket, "Dispatch failed: #{inspect(reason)}")
     end
+  end
+
+  defp publish_or_schedule(socket, _variant, _slot, _mode, scheduled_at) do
+    post = PostQuery.get_post_details(socket.assigns.post.id)
+
+    {:noreply,
+     socket
+     |> assign(:post, post)
+     |> close_publish_modal()
+     |> put_flash(
+       :info,
+       "📅 Post scheduled for #{Calendar.strftime(scheduled_at, "%b %d, %Y at %H:%M UTC")}!"
+     )}
+  end
+
+  defp close_publish_modal(socket) do
+    socket
+    |> assign(:show_schedule_modal, false)
+    |> assign(:publishing_variant_id, nil)
+  end
+
+  defp publish_error(socket, message) do
+    {:noreply,
+     socket
+     |> close_publish_modal()
+     |> put_flash(:error, message)}
   end
 
   defp ensure_approved(%{status: "approved"} = variant), do: {:ok, variant}

@@ -52,7 +52,7 @@ defmodule FlyrankCapstoneSocialStudio.DurableSchedulerTest do
 
       # Retrieve history logs
       history = Publishing.list_history()
-      assert length(history) >= 1
+      assert history != []
 
       [latest_attempt | _] = history
       assert latest_attempt.slot_id == slot.id

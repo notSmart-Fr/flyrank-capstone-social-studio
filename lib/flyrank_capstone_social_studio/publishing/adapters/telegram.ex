@@ -1,4 +1,8 @@
 defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
+  @moduledoc """
+  Publishes social post content to Telegram channels.
+  """
+
   @behaviour FlyrankCapstoneSocialStudio.Publishing.SocialPublisher
 
   @spec publish(any()) ::

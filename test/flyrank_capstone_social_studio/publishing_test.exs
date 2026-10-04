@@ -160,7 +160,7 @@ defmodule FlyrankCapstoneSocialStudio.PublishingTest do
       assert {:ok, attempt} = Publishing.dispatch_slot(slot)
 
       history = Publishing.list_history()
-      assert length(history) >= 1
+      assert history != []
 
       recorded = Enum.find(history, &(&1.id == attempt.id))
       assert recorded != nil

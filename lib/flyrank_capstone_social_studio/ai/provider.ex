@@ -1,4 +1,8 @@
 defmodule FlyrankCapstoneSocialStudio.Ai.Provider do
+  @moduledoc """
+  Behaviour for AI content generation adapters.
+  """
+
   @doc """
   Behaviour for AI content generation adapters.
   """

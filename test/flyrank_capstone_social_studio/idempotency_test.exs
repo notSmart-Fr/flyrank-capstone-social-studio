@@ -4,6 +4,7 @@ defmodule FlyrankCapstoneSocialStudio.IdempotencyTest do
   alias FlyrankCapstoneSocialStudio.Content
   alias FlyrankCapstoneSocialStudio.Publishing
   alias FlyrankCapstoneSocialStudio.Publishing.PublishAttempt
+  alias FlyrankCapstoneSocialStudio.Publishing.Slot
 
   describe "Phase 4 Gate: Social Adapters & Idempotent Dispatcher" do
     setup do
@@ -61,6 +62,43 @@ defmodule FlyrankCapstoneSocialStudio.IdempotencyTest do
       # Database check: strictly ONE attempt record exists for this slot
       attempts = Repo.all(from pa in PublishAttempt, where: pa.slot_id == ^slot.id)
       assert length(attempts) == 1
+    end
+
+    test "concurrent dispatches on the same slot result in only one publish", %{slot: slot} do
+      task1 = Task.async(fn -> Publishing.dispatch_slot(slot) end)
+      task2 = Task.async(fn -> Publishing.dispatch_slot(slot) end)
+
+      results = [Task.await(task1), Task.await(task2)]
+
+      # Assert one process executed successfully and the other short-circuited
+      assert Enum.count(results, &match?({:ok, %Publishing.PublishAttempt{}}, &1)) == 1
+      assert Enum.count(results, &match?({:error, :concurrent_request_in_flight}, &1)) == 1
+    end
+
+    test "allows scheduling an approved variant and enqueues job", %{approved_variant: variant} do
+      params = %{
+        "scheduled_at" =>
+          DateTime.utc_now() |> DateTime.add(3600, :second) |> DateTime.to_iso8601(),
+        "idempotency_key" => "key-approved-#{:erlang.unique_integer([:positive])}"
+      }
+
+      assert {:ok, %Slot{} = slot} = Publishing.schedule_variant(variant, params)
+
+      # Assert Oban job was scheduled for this slot
+      assert_enqueued(
+        worker: FlyrankCapstoneSocialStudio.Workers.PublishVariantWorker,
+        args: %{"slot_id" => slot.id}
+      )
+    end
+
+    test "short-circuits gracefully when slot is already published", %{slot: slot} do
+      assert {:ok, _attempt} = Publishing.dispatch_slot(slot)
+
+      # Fetch un-preloaded slot from DB
+      published_slot = Repo.get!(Slot, slot.id)
+
+      # Asserts that dispatch_slot handles unloaded associations safely
+      assert {:ok, %{status: :already_published}} = Publishing.dispatch_slot(published_slot)
     end
   end
 end

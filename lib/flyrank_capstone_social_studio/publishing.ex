@@ -8,7 +8,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   alias FlyrankCapstoneSocialStudio.Repo
 
   alias FlyrankCapstoneSocialStudio.Content.Variant
-  alias FlyrankCapstoneSocialStudio.Publishing.PublishAttempt
   alias FlyrankCapstoneSocialStudio.Publishing.{PublishAttempt, Slot}
   alias FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker
 
@@ -16,7 +15,8 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # Scheduling & Oban Integration
   # ===========================================================================
 
-  @spec schedule_variant(FlyrankCapstoneSocialStudio.Content.Variant.t(), any()) :: any()
+  @spec schedule_variant(FlyrankCapstoneSocialStudio.Content.Variant.t(), map(), keyword()) ::
+          {:ok, Slot.t()} | {:error, Ecto.Changeset.t() | :unapproved_variant | term()}
   @doc """
   Schedules an approved variant into a publication slot and enqueues its dispatch job.
 
@@ -48,7 +48,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
     mode = Keyword.get(opts, :mode, :manual)
     scheduled_at = resolve_scheduled_at(mode, variant.platform, attrs)
 
-    # 1. Resolve or generate an idempotency key fallback
     raw_key = Map.get(attrs, :idempotency_key) || Map.get(attrs, "idempotency_key")
     idempotency_key = raw_key || "slot_#{variant.id}_#{System.system_time(:microsecond)}"
 
@@ -57,51 +56,73 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
       |> Map.new(fn {k, v} -> {to_string(k), v} end)
       |> Map.put("variant_id", variant.id)
       |> Map.put("scheduled_at", scheduled_at)
-      # 👈 Guarantees key presence
       |> Map.put("idempotency_key", idempotency_key)
 
-    # 2. If caller provided an explicit idempotency key, execute direct path
     if raw_key do
-      case create_slot(string_attrs) do
-        {:ok, slot} ->
-          maybe_enqueue_publish_job(slot, opts)
-          {:ok, slot}
-
-        {:error, changeset} ->
-          {:error, changeset}
-      end
+      execute_direct_schedule(string_attrs, opts)
     else
-      # 3. Automatic fallback path: uses generated key in transaction
-      Repo.transaction(fn ->
-        lock_variant_row(variant.id)
-
-        case get_latest_variant_slot(variant.id) do
-          %Slot{status: "failed"} = failed_slot ->
-            {:ok, retry_slot} =
-              update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at})
-
-            maybe_enqueue_publish_job(retry_slot, opts)
-            retry_slot
-
-          nil ->
-            case create_slot(string_attrs) do
-              {:ok, slot} ->
-                maybe_enqueue_publish_job(slot, opts)
-                slot
-
-              {:error, changeset} ->
-                Repo.rollback(changeset)
-            end
-
-          %Slot{} = existing_slot ->
-            existing_slot
-        end
-      end)
+      handle_variant_slot(variant.id, scheduled_at, string_attrs, opts)
     end
   end
 
   def schedule_variant(%Variant{}, _attrs, _opts) do
     {:error, :unapproved_variant}
+  end
+
+  # --- Private Helpers for Scheduling ---
+
+  defp execute_direct_schedule(string_attrs, opts) do
+    case create_slot(string_attrs) do
+      {:ok, slot} ->
+        maybe_enqueue_publish_job(slot, opts)
+        {:ok, slot}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  defp handle_variant_slot(variant_id, scheduled_at, string_attrs, opts) do
+    Repo.transaction(fn ->
+      execute_slot_state_transition(variant_id, scheduled_at, string_attrs, opts)
+    end)
+  end
+
+  defp execute_slot_state_transition(variant_id, scheduled_at, string_attrs, opts) do
+    lock_variant_row(variant_id)
+
+    case get_latest_variant_slot(variant_id) do
+      %Slot{status: "failed"} = failed_slot ->
+        retry_failed_slot(failed_slot, scheduled_at, opts)
+
+      nil ->
+        create_and_enqueue_slot(string_attrs, opts)
+
+      %Slot{} = existing_slot ->
+        existing_slot
+    end
+  end
+
+  defp retry_failed_slot(failed_slot, scheduled_at, opts) do
+    case update_slot(failed_slot, %{status: "pending", scheduled_at: scheduled_at}) do
+      {:ok, retry_slot} ->
+        maybe_enqueue_publish_job(retry_slot, opts)
+        retry_slot
+
+      {:error, changeset} ->
+        Repo.rollback(changeset)
+    end
+  end
+
+  defp create_and_enqueue_slot(string_attrs, opts) do
+    case create_slot(string_attrs) do
+      {:ok, slot} ->
+        maybe_enqueue_publish_job(slot, opts)
+        slot
+
+      {:error, changeset} ->
+        Repo.rollback(changeset)
+    end
   end
 
   defp maybe_enqueue_publish_job(slot, opts) do
@@ -140,7 +161,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # Audit History Queries
   # ===========================================================================
 
-  @spec list_history() :: any()
   @doc """
   Lists all publish attempts with preloaded slots and variants for history audit logs.
   """
@@ -156,31 +176,21 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # Slot CRUD Operations
   # ===========================================================================
 
-  @spec list_slots() :: any()
   def list_slots, do: Repo.all(Slot)
   def get_slot!(id), do: Repo.get!(Slot, id)
 
-  @spec create_slot(
-          :invalid
-          | %{optional(:__struct__) => none(), optional(atom() | binary()) => any()}
-        ) :: any()
   def create_slot(attrs) do
     %Slot{}
     |> Slot.changeset(attrs)
     |> Repo.insert()
   end
 
-  @spec update_slot(
-          FlyrankCapstoneSocialStudio.Publishing.Slot.t(),
-          :invalid | %{optional(:__struct__) => none(), optional(atom() | binary()) => any()}
-        ) :: any()
   def update_slot(%Slot{} = slot, attrs) do
     slot
     |> Slot.changeset(attrs)
     |> Repo.update()
   end
 
-  @spec delete_slot(FlyrankCapstoneSocialStudio.Publishing.Slot.t()) :: any()
   def delete_slot(%Slot{} = slot), do: Repo.delete(slot)
   def change_slot(%Slot{} = slot, attrs \\ %{}), do: Slot.changeset(slot, attrs)
 
@@ -213,7 +223,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # Private Helpers (Extracted Query & Business Calculation Logic)
   # ===========================================================================
 
-  # Calculates schedule target timestamp based on mode
   defp resolve_scheduled_at(:manual, _platform, attrs) do
     Map.get(attrs, "scheduled_at") || Map.get(attrs, :scheduled_at) || DateTime.utc_now()
   end
@@ -234,19 +243,16 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
     end
   end
 
-  # Locks a variant row for pessimistic concurrency control
   defp lock_variant_row(variant_id) do
     from(v in Variant, where: v.id == ^variant_id, lock: "FOR UPDATE")
     |> Repo.one!()
   end
 
-  # Finds the latest slot created for a given variant
   defp get_latest_variant_slot(variant_id) do
     from(s in Slot, where: s.variant_id == ^variant_id, order_by: [desc: s.inserted_at], limit: 1)
     |> Repo.one()
   end
 
-  # Finds the latest pending/published slot scheduled_at timestamp for a platform
   defp get_latest_platform_slot_time(platform) do
     from(s in Slot,
       join: v in assoc(s, :variant),
@@ -256,7 +262,6 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
     |> Repo.one()
   end
 
-  # Enqueues the Oban job for dispatching
   defp enqueue_publish_job(%Slot{} = slot) do
     scheduled_at = slot.scheduled_at || DateTime.utc_now()
 

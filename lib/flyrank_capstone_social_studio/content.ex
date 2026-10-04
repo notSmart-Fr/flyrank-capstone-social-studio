@@ -215,14 +215,16 @@ defmodule FlyrankCapstoneSocialStudio.Content do
     key = idempotency_key || Ecto.UUID.generate()
 
     case Repo.get_by(IdempotencyKey, key: key) do
+      # 1. Previously completed -> Return cached response
       %IdempotencyKey{status: "completed", response_payload: payload} ->
         {:ok, deserialize_response(payload)}
 
+      # 2. Currently processing in another process -> In-flight error
       %IdempotencyKey{status: "processing"} ->
         {:error, :concurrent_request_in_flight}
 
+      # 3. New key attempt -> Resolve URL outside DB transaction, then run transaction
       nil ->
-        # 1. Resolve URL/raw attributes OUTSIDE DB transaction
         with {:ok, resolved_attrs} <- resolve_post_attrs(post_attrs) do
           execute_idempotent_ingestion(key, resolved_attrs, platforms)
         end
@@ -231,36 +233,52 @@ defmodule FlyrankCapstoneSocialStudio.Content do
 
   # Executes the DB transaction for locking key and saving Post + Variants
   defp execute_idempotent_ingestion(key, resolved_attrs, platforms) do
-    case Repo.transaction(fn ->
-           changeset = IdempotencyKey.changeset(%{key: key, status: "processing"})
+    case Repo.transaction(fn -> run_ingestion_transaction(key, resolved_attrs, platforms) end) do
+      {:ok, {post, variants}} ->
+        {:ok, {post, variants}}
 
-           with {:ok, _record} <- Repo.insert(changeset),
-                {:ok, {post, variants}} <-
-                  execute_template_ingest_transaction(resolved_attrs, platforms) do
-             payload = serialize_response(post, variants)
-
-             Repo.get_by!(IdempotencyKey, key: key)
-             |> IdempotencyKey.changeset(%{status: "completed", response_payload: payload})
-             |> Repo.update!()
-
-             {post, variants}
-           else
-             {:error, %Ecto.Changeset{} = changeset} ->
-               if Keyword.has_key?(changeset.errors, :key) do
-                 Repo.rollback({:idempotency_key_conflict, changeset})
-               else
-                 Repo.rollback(changeset)
-               end
-
-             {:error, reason} ->
-               Repo.rollback(reason)
-           end
-         end) do
       {:error, {:idempotency_key_conflict, _changeset}} ->
         {:error, :concurrent_request_in_flight}
 
-      result ->
-        result
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp run_ingestion_transaction(key, resolved_attrs, platforms) do
+    lock_changeset = IdempotencyKey.changeset(%{key: key, status: "processing"})
+
+    with {:ok, _key_record} <- Repo.insert(lock_changeset),
+         {:ok, {post, variants}} <- execute_template_ingest_transaction(resolved_attrs, platforms),
+         payload = serialize_response(post, variants),
+         {:ok, _updated_key} <- update_idempotency_status(key, "completed", payload) do
+      {post, variants}
+    else
+      {:error, %Ecto.Changeset{} = changeset} ->
+        handle_ingestion_error(changeset)
+
+      {:error, reason} ->
+        Repo.rollback(reason)
+    end
+  end
+
+  defp handle_ingestion_error(%Ecto.Changeset{} = changeset) do
+    if Keyword.has_key?(changeset.errors, :key) do
+      Repo.rollback({:idempotency_key_conflict, changeset})
+    else
+      Repo.rollback(changeset)
+    end
+  end
+
+  defp update_idempotency_status(key, status, payload) do
+    case Repo.get_by(IdempotencyKey, key: key) do
+      nil ->
+        {:error, :key_not_found}
+
+      record ->
+        record
+        |> IdempotencyKey.changeset(%{status: status, response_payload: payload})
+        |> Repo.update()
     end
   end
 
@@ -333,19 +351,21 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   defp execute_template_ingest_transaction(resolved_attrs, platforms) do
     case create_post(resolved_attrs) do
       {:ok, post} ->
-        variants =
-          Enum.map(platforms, fn platform ->
-            case create_template_variant_for_platform(post, platform) do
-              {:ok, variant} -> variant
-              {:error, reason} -> Repo.rollback(reason)
-            end
-          end)
-
+        variants = create_template_variants(post, platforms)
         {:ok, {post, variants}}
 
       {:error, changeset} ->
         {:error, changeset}
     end
+  end
+
+  defp create_template_variants(post, platforms) do
+    Enum.map(platforms, fn platform ->
+      case create_template_variant_for_platform(post, platform) do
+        {:ok, variant} -> variant
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
 
   # Formats content based on profile rules (hashtags, character limits)
@@ -378,22 +398,7 @@ defmodule FlyrankCapstoneSocialStudio.Content do
 
     case url do
       url when is_binary(url) and url != "" ->
-        case UrlFetcher.fetch_and_extract(url) do
-          {:ok, extracted_text} ->
-            updated_attrs =
-              attrs
-              |> Map.put("url", url)
-              |> Map.put("content", extracted_text)
-              |> Map.update("title", "Fetched: #{url}", fn
-                "" -> "Fetched: #{url}"
-                existing -> existing
-              end)
-
-            {:ok, updated_attrs}
-
-          {:error, reason} ->
-            {:error, reason}
-        end
+        resolve_url_post_attrs(attrs, url)
 
       _ ->
         {:ok, attrs}
@@ -401,6 +406,21 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   end
 
   defp resolve_post_attrs(attrs), do: {:ok, attrs}
+
+  defp resolve_url_post_attrs(attrs, url) do
+    with {:ok, extracted_text} <- UrlFetcher.fetch_and_extract(url) do
+      updated_attrs =
+        attrs
+        |> Map.put("url", url)
+        |> Map.put("content", extracted_text)
+        |> Map.update("title", "Fetched: #{url}", fn
+          "" -> "Fetched: #{url}"
+          existing -> existing
+        end)
+
+      {:ok, updated_attrs}
+    end
+  end
 
   # Serialization helpers so cached JSON maps reconstruct %Post{} & %Variant{} structs
   defp serialize_response(post, variants) do

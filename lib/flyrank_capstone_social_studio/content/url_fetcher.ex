@@ -45,17 +45,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.UrlFetcher do
             "script, style, nav, footer, header, iframe, noscript, svg, form"
           )
 
-        extracted_nodes =
-          case Floki.find(cleaned, "article") do
-            [] ->
-              case Floki.find(cleaned, "main") do
-                [] -> Floki.find(cleaned, "body")
-                main_nodes -> main_nodes
-              end
-
-            article_nodes ->
-              article_nodes
-          end
+        extracted_nodes = preferred_content_nodes(cleaned)
 
         extracted_nodes
         |> Floki.text(sep: "\n")
@@ -66,6 +56,20 @@ defmodule FlyrankCapstoneSocialStudio.Content.UrlFetcher do
 
       _ ->
         ""
+    end
+  end
+
+  defp preferred_content_nodes(document) do
+    case Floki.find(document, "article") do
+      [] -> find_main_or_body(document)
+      article_nodes -> article_nodes
+    end
+  end
+
+  defp find_main_or_body(document) do
+    case Floki.find(document, "main") do
+      [] -> Floki.find(document, "body")
+      main_nodes -> main_nodes
     end
   end
 end

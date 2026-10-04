@@ -1,4 +1,8 @@
 defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.MockLinkedIn do
+  @moduledoc """
+  Simulates publishing posts to LinkedIn for development and testing.
+  """
+
   @behaviour FlyrankCapstoneSocialStudio.Publishing.SocialPublisher
 
   @impl true

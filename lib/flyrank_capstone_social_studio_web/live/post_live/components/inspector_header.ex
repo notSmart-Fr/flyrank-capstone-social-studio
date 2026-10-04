@@ -1,4 +1,8 @@
 defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Components.InspectorHeader do
+  @moduledoc """
+  Renders the post inspector breadcrumb and header.
+  """
+
   use FlyrankCapstoneSocialStudioWeb, :html
 
   attr :post, :map, required: true

@@ -1,4 +1,8 @@
 defmodule FlyrankCapstoneSocialStudioWeb.Plugs.IdempotencyLock do
+  @moduledoc """
+  Replays completed idempotent responses and rejects requests that are still in flight.
+  """
+
   import Plug.Conn
   import Phoenix.Controller, only: [json: 2]
   alias FlyrankCapstoneSocialStudio.Content.IdempotencyKey
