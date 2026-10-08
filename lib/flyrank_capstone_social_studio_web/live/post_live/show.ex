@@ -85,6 +85,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
   def handle_event("select_variant", %{"variant_id" => variant_id}, socket),
     do: VariantAction.select_variant(socket, variant_id)
 
+  @impl true
+  def handle_event("verify_grounding", %{"id" => variant_id}, socket),
+    do: VariantAction.verify_grounding(socket, variant_id)
+
   # Oban Worker succeeded -> reload post and inform UI
   @impl true
   def handle_info({:slot_published, _slot}, socket) do

@@ -57,7 +57,7 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
       :generation_cost
     ])
     |> validate_required([:platform, :content, :status])
-    |> validate_inclusion(:status, ["draft", "approved", "rejected", "published"])
+    |> validate_inclusion(:status, ["draft", "needs_review", "approved", "rejected", "published"])
     |> validate_inclusion(:platform, ConstraintProfile.supported_platforms())
     |> calculate_counts()
     |> validate_constraints()

@@ -332,6 +332,37 @@ defmodule FlyrankCapstoneSocialStudio.Content do
   end
 
   @doc """
+  Audits a variant's factual grounding against its parent post.
+  Updates the variant's status and rejection reason accordingly.
+  """
+  @spec verify_variant_grounding(Variant.t(), keyword()) ::
+          {:ok, Variant.t()} | {:error, Ecto.Changeset.t()}
+  def verify_variant_grounding(%Variant{} = variant, opts \\ []) do
+    post = get_post!(variant.post_id)
+
+    case FlyrankCapstoneSocialStudio.Content.GroundingVerifier.verify_grounding(
+           post.content,
+           variant.content,
+           opts
+         ) do
+      {:ok, :grounded} ->
+        update_variant(variant, %{status: "draft", rejection_reason: nil})
+
+      {:error, :hallucination_detected, claims} ->
+        reason =
+          "Grounding Audit Failed: Fake or unsupported claims detected -> #{Enum.join(claims, ", ")}"
+
+        update_variant(variant, %{status: "rejected", rejection_reason: reason})
+
+      {:error, :audit_failed, reason} ->
+        update_variant(variant, %{
+          status: "needs_review",
+          rejection_reason: "Grounding Audit Incomplete: #{reason}"
+        })
+    end
+  end
+
+  @doc """
   Retrieves a blog post with all its associated variants and scheduled publishing slots.
   """
   @spec get_campaign_details(term()) :: Post.t() | nil

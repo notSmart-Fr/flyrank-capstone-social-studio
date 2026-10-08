@@ -46,7 +46,15 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction do
       else
         variant_id = Map.get(params, "variant_id") || Map.get(current_variant, :id)
         variant = Content.get_variant!(variant_id)
-        Content.update_variant(variant, %{content: new_content})
+
+        update_params =
+          if variant.status in ["needs_review", "rejected"] do
+            %{content: new_content, status: "draft", rejection_reason: nil}
+          else
+            %{content: new_content}
+          end
+
+        Content.update_variant(variant, update_params)
       end
 
     case result do
@@ -106,5 +114,33 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction do
      socket
      |> assign(:current_variant, selected)
      |> assign(:is_unsaved_ai_draft, true)}
+  end
+
+  def verify_grounding(socket, variant_id) do
+    variant = Content.get_variant!(variant_id)
+
+    case Content.verify_variant_grounding(variant) do
+      {:ok, updated_variant} ->
+        post = PostQuery.get_post_details(socket.assigns.post.id)
+
+        msg =
+          case updated_variant.status do
+            "draft" -> "Grounding verified! Variant claims are supported by source text."
+            "rejected" -> "Grounding audit failed: Unsupported claims detected."
+            "needs_review" -> "Grounding audit incomplete: #{updated_variant.rejection_reason}"
+            _ -> "Grounding check complete."
+          end
+
+        flash_type = if updated_variant.status == "draft", do: :info, else: :error
+
+        {:noreply,
+         socket
+         |> assign(:post, post)
+         |> assign(:current_variant, updated_variant)
+         |> put_flash(flash_type, msg)}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Could not run grounding audit.")}
+    end
   end
 end

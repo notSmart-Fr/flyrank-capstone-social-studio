@@ -115,6 +115,20 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.PublishActionTest do
       assert Repo.all(from s in Slot, where: s.variant_id == ^variant.id) == []
     end
 
+    test "a needs_review variant cannot be published and stays in needs_review", %{
+      socket: socket,
+      variant: variant
+    } do
+      {:ok, needs_review} = Content.update_variant(variant, %{status: "needs_review"})
+      socket = put_in(socket.assigns.current_variant, needs_review)
+
+      assert {:noreply, socket} = PublishAction.confirm_publish(socket, %{"mode" => "now"})
+
+      assert socket.assigns.flash["error"] =~ "Cannot publish a needs_review variant"
+      assert Content.get_variant!(variant.id).status == "needs_review"
+      assert Repo.all(from s in Slot, where: s.variant_id == ^variant.id) == []
+    end
+
     test "an already published variant cannot be published again", %{
       socket: socket,
       variant: variant

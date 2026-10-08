@@ -189,6 +189,19 @@ defmodule FlyrankCapstoneSocialStudio.Workers.GenerateVariantsWorkerTest do
       assert draft_a.rejection_reason =~ "HTTP 500"
       assert draft_b.status == "needs_review"
       assert draft_b.rejection_reason =~ "HTTP 500"
+
+      # Verify that needs_review variants persist successfully in Content.create_variant
+      assert {:ok, persisted_variant} =
+               Content.create_variant(%{
+                 post_id: post.id,
+                 platform: "telegram",
+                 content: draft_a.content,
+                 status: draft_a.status,
+                 rejection_reason: draft_a.rejection_reason,
+                 model_used: draft_a.model_used
+               })
+
+      assert persisted_variant.status == "needs_review"
     end
   end
 

@@ -47,12 +47,17 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.AiAction do
 
     selected_draft = if choice == "B", do: candidates.b, else: candidates.a
 
+    status =
+      if selected_draft.status in ["draft", "needs_review", "approved", "rejected", "published"],
+        do: selected_draft.status,
+        else: "draft"
+
     variant_params = %{
       post_id: post.id,
       platform: platform,
       variant_label: choice,
       content: selected_draft.content,
-      status: selected_draft.status,
+      status: status,
       rejection_reason: selected_draft.rejection_reason,
       model_used: selected_draft.model_used,
       prompt_tokens: Map.get(selected_draft, :prompt_tokens, 0),
@@ -76,8 +81,13 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.AiAction do
            "Variant #{choice} saved to database for #{String.upcase(platform)}!"
          )}
 
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Failed to persist selected variant.")}
+      {:error, changeset} ->
+        error_msg =
+          changeset.errors
+          |> Enum.map(fn {field, {msg, _}} -> "#{field} #{msg}" end)
+          |> Enum.join(", ")
+
+        {:noreply, put_flash(socket, :error, "Failed to persist selected variant: #{error_msg}")}
     end
   end
 
