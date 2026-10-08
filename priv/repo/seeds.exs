@@ -37,7 +37,8 @@ if is_nil(existing) do
     Content.create_variant(%{
       post_id: post.id,
       platform: "mock_x",
-      content: "Building distributed systems? The BEAM VM + Oban gives you supervision trees and durable queues. Let it crash safely. #elixir #backend",
+      content:
+        "Building distributed systems? The BEAM VM + Oban gives you supervision trees and durable queues. Let it crash safely. #elixir #backend",
       status: "approved",
       model_used: "gemini-2.5-flash",
       prompt_tokens: 180,
@@ -50,6 +51,7 @@ if is_nil(existing) do
 
   # 3. Seed Scheduled Slot for Mock X Variant
   scheduled_time = DateTime.utc_now() |> DateTime.add(3600, :second) |> DateTime.truncate(:second)
+
   {:ok, slot} =
     Repo.insert(%Slot{
       variant_id: var_x.id,
@@ -89,7 +91,8 @@ if is_nil(existing) do
     Content.create_variant(%{
       post_id: post.id,
       platform: "telegram",
-      content: "🚀 New Guide Published: Building resilient background jobs with Elixir and Oban.\n\nCheck it out here! #dev #elixir",
+      content:
+        "🚀 New Guide Published: Building resilient background jobs with Elixir and Oban.\n\nCheck it out here! #dev #elixir",
       status: "published",
       model_used: "gemini-2.5-flash",
       prompt_tokens: 150,
@@ -98,7 +101,9 @@ if is_nil(existing) do
       generation_cost: Decimal.new("0.000100")
     })
 
-  published_time = DateTime.utc_now() |> DateTime.add(-1800, :second) |> DateTime.truncate(:second)
+  published_time =
+    DateTime.utc_now() |> DateTime.add(-1800, :second) |> DateTime.truncate(:second)
+
   {:ok, past_slot} =
     Repo.insert(%Slot{
       variant_id: var_tg.id,
@@ -113,7 +118,7 @@ if is_nil(existing) do
       adapter_name: "FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram",
       status: "success",
       external_post_id: "tg_msg_8849102",
-      response_payload: %{"ok" => true, "result" => %{"message_id" => 8849102}}
+      response_payload: %{"ok" => true, "result" => %{"message_id" => 8_849_102}}
     })
 
   IO.puts("    Created published Variant ##{var_tg.id} (telegram) with audit history")
