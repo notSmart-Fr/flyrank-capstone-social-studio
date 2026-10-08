@@ -7,20 +7,32 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
 
   @spec publish(any()) ::
           {:error, <<_::64, _::_*8>>} | {:ok, %{external_id: binary(), raw_response: <<_::168>>}}
+  @max_telegram_characters 4096
+
   @doc """
   Publishes text to a Telegram channel via the Telegram Bot API.
+  Uses a Railway-Oriented pipeline: validate payload -> resolve credentials -> dispatch HTTP.
   """
   @impl true
   def publish(content, opts \\ []) do
-    case resolve_credentials(opts) do
-      {:ok, token, chat_id} ->
-        post_to_telegram(token, chat_id, content)
-
-      {:error, reason} ->
-        {:error, reason}
+    with :ok <- validate_content_payload(content),
+         {:ok, token, chat_id} <- resolve_credentials(opts) do
+      post_to_telegram(token, chat_id, content, opts)
     end
   end
 
+  # Railway Track 1: Payload Ceiling Verification
+  defp validate_content_payload(content) when is_binary(content) do
+    if String.length(content) > @max_telegram_characters do
+      {:error, "Content exceeds Telegram #{@max_telegram_characters} character limit"}
+    else
+      :ok
+    end
+  end
+
+  defp validate_content_payload(_), do: {:error, "Invalid Telegram content"}
+
+  # Railway Track 2: Credential Resolution
   defp resolve_credentials(opts) do
     token =
       System.get_env("TELEGRAM_BOT_TOKEN") ||
@@ -39,7 +51,8 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
     end
   end
 
-  defp post_to_telegram(token, chat_id, content) do
+  # Railway Track 3: HTTP Transmission
+  defp post_to_telegram(token, chat_id, content, opts) do
     base_url =
       Application.get_env(
         :flyrank_capstone_social_studio,
@@ -47,12 +60,13 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
         "https://api.telegram.org"
       )
 
+    parse_mode = Keyword.get(opts, :parse_mode, "HTML")
     url = "#{base_url}/bot#{token}/sendMessage"
 
     payload = %{
       chat_id: chat_id,
       text: content,
-      parse_mode: "Markdown"
+      parse_mode: parse_mode
     }
 
     case Req.post(url,

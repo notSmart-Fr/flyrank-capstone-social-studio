@@ -124,6 +124,48 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
       error_msg = Enum.join(errors.content, " ")
       assert error_msg =~ "exceeds maximum character limit"
     end
+
+    test "telegram constraint profile enforces 4096 max_length and HTML parse_mode" do
+      alias FlyrankCapstoneSocialStudio.Content.ConstraintProfile
+
+      profile = ConstraintProfile.get("telegram")
+      assert profile != nil
+      assert profile.max_length == 4096
+      assert profile.max_hashtags == 5
+      assert profile.parse_mode == "HTML"
+    end
+
+    test "Variant.validate_platform_constraints/2 validates valid content successfully" do
+      alias FlyrankCapstoneSocialStudio.Content.Variant
+
+      variant = %Variant{
+        platform: "telegram",
+        content: "Valid Telegram broadcast post #update"
+      }
+
+      assert :ok = Variant.validate_platform_constraints(variant)
+      assert :ok = Variant.validate_platform_constraints(variant, "telegram")
+    end
+
+    test "Variant.validate_platform_constraints/2 catches length and hashtag violations" do
+      alias FlyrankCapstoneSocialStudio.Content.Variant
+
+      too_long = %Variant{
+        platform: "telegram",
+        content: String.duplicate("a", 4097)
+      }
+
+      assert {:error, violations} = Variant.validate_platform_constraints(too_long)
+      assert :content_too_long in violations
+
+      too_many_tags = %Variant{
+        platform: "telegram",
+        content: "Update #one #two #three #four #five #six"
+      }
+
+      assert {:error, tag_violations} = Variant.validate_platform_constraints(too_many_tags)
+      assert :too_many_hashtags in tag_violations
+    end
   end
 
   # -------------------------------------------------------------------------

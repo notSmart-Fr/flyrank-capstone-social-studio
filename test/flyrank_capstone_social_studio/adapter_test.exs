@@ -104,7 +104,10 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
     test "posts the expected payload and returns the message id", %{bypass: bypass} do
       Bypass.expect_once(bypass, "POST", "/bottest-token/sendMessage", fn conn ->
         {:ok, body, conn} = Plug.Conn.read_body(conn)
-        assert %{"chat_id" => "12345", "text" => "Hello TG"} = Jason.decode!(body)
+        decoded = Jason.decode!(body)
+        assert decoded["chat_id"] == "12345"
+        assert decoded["text"] == "Hello TG"
+        assert decoded["parse_mode"] == "HTML"
 
         conn
         |> Plug.Conn.put_resp_content_type("application/json")
@@ -112,6 +115,16 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
       end)
 
       assert {:ok, %{external_id: "42"}} = Telegram.publish("Hello TG")
+    end
+
+    test "rejects content exceeding 4096 character Telegram ceiling without making HTTP call", %{
+      bypass: _bypass
+    } do
+      # If an HTTP call is attempted, Bypass will fail the test because no expectations are set
+      too_long = String.duplicate("A", 4097)
+
+      assert {:error, "Content exceeds Telegram 4096 character limit"} =
+               Telegram.publish(too_long)
     end
 
     test "rate limiting (HTTP 429) is returned as an error", %{bypass: bypass} do

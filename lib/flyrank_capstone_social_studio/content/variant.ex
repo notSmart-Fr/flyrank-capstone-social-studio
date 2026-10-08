@@ -131,4 +131,77 @@ defmodule FlyrankCapstoneSocialStudio.Content.Variant do
       changeset
     end
   end
+
+  @doc """
+  Railway-Oriented constraint validation for Variants prior to dispatching or publishing.
+  Operates on the `%Variant{}` schema and returns `:ok` or `{:error, violations}`.
+  """
+  @spec validate_platform_constraints(%__MODULE__{}, String.t() | nil) ::
+          :ok | {:error, list(atom())}
+  def validate_platform_constraints(variant, platform_override \\ nil)
+
+  def validate_platform_constraints(%__MODULE__{} = variant, platform_override) do
+    platform = platform_override || variant.platform
+    content = variant.content || ""
+
+    case ConstraintProfile.get(platform) do
+      nil ->
+        {:error, [:unknown_platform]}
+
+      %ConstraintProfile{} = profile ->
+        # Railway track: start on the success track with zero violations
+        []
+        |> check_content_presence(content)
+        |> check_character_limit(content, profile)
+        |> check_hashtag_limit(content, profile)
+        |> check_tone_violations(content)
+        |> finalize_constraint_railway()
+    end
+  end
+
+  # Railway step 1: check content non-empty
+  defp check_content_presence(violations, content) do
+    if String.trim(content) == "" do
+      [:empty_content | violations]
+    else
+      violations
+    end
+  end
+
+  # Railway step 2: check character length ceiling
+  defp check_character_limit(violations, content, %ConstraintProfile{max_length: max}) do
+    actual = String.length(content)
+
+    if actual > max do
+      [:content_too_long | violations]
+    else
+      violations
+    end
+  end
+
+  # Railway step 3: check hashtag quota
+  defp check_hashtag_limit(violations, content, %ConstraintProfile{max_hashtags: max}) do
+    actual = ConstraintProfile.count_hashtags(content)
+
+    if actual > max do
+      [:too_many_hashtags | violations]
+    else
+      violations
+    end
+  end
+
+  # Railway step 4: check banned tone words
+  defp check_tone_violations(violations, content) do
+    banned_tone_words = ["OMG", "SLAY", "LMAO"]
+
+    if Enum.any?(banned_tone_words, &String.contains?(content, &1)) do
+      [:tone_violation | violations]
+    else
+      violations
+    end
+  end
+
+  # Terminus of the railway: switch track to :ok or {:error, list}
+  defp finalize_constraint_railway([]), do: :ok
+  defp finalize_constraint_railway(violations), do: {:error, Enum.reverse(violations)}
 end

@@ -7,10 +7,11 @@ defmodule FlyrankCapstoneSocialStudio.Content.ConstraintProfile do
           platform: String.t(),
           max_length: pos_integer(),
           tone: String.t(),
-          max_hashtags: pos_integer()
+          max_hashtags: pos_integer(),
+          parse_mode: String.t() | nil
         }
 
-  defstruct [:platform, :max_length, :tone, :max_hashtags]
+  defstruct [:platform, :max_length, :tone, :max_hashtags, :parse_mode]
 
   @doc "Retrieves profile struct for a platform string."
   def get(platform), do: Map.get(profiles(), platform)
@@ -30,33 +31,38 @@ defmodule FlyrankCapstoneSocialStudio.Content.ConstraintProfile do
     %{
       "telegram" => %__MODULE__{
         platform: "telegram",
-        max_length: 2000,
+        max_length: 4096,
         tone: "Conversational and informative",
-        max_hashtags: 5
+        max_hashtags: 5,
+        parse_mode: "HTML"
       },
       "discord" => %__MODULE__{
         platform: "discord",
         max_length: 2000,
         tone: "Conversational, community-oriented, and informative",
-        max_hashtags: 5
+        max_hashtags: 5,
+        parse_mode: "Markdown"
       },
       "mastodon" => %__MODULE__{
         platform: "mastodon",
         max_length: 2000,
         tone: "Conversational, concise, and authentic",
-        max_hashtags: 5
+        max_hashtags: 5,
+        parse_mode: nil
       },
       "mock_x" => %__MODULE__{
         platform: "mock_x",
         max_length: 280,
         tone: "Concise and direct",
-        max_hashtags: 2
+        max_hashtags: 2,
+        parse_mode: nil
       },
       "mock_linkedin" => %__MODULE__{
         platform: "mock_linkedin",
         max_length: 3000,
         tone: "Professional and insight-oriented",
-        max_hashtags: 5
+        max_hashtags: 5,
+        parse_mode: nil
       }
     }
   end

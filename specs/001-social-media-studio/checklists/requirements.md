@@ -33,5 +33,6 @@
 
 - All core capstone requirements from Sections 3-5 of the FlyRank Capstone Brief are captured in FR-001 through FR-013.
 - Stretch goals (A/B generation, Grounding checks, AI campaign cost accounting) are fully codified in User Story 5 and FR-014 through FR-016.
+- Defense-in-depth pre-publish guard and Telegram API constraints are codified in User Story 3, FR-018, FR-019, and SC-007.
 - Multi-tenancy is explicitly marked out of scope per user guidance to freeze scope.
 

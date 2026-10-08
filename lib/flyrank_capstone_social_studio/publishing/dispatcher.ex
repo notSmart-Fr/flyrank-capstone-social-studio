@@ -45,21 +45,21 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
     # Preload variant to get content and platform
     slot = Repo.preload(slot, :variant)
     variant = slot.variant
-
     adapter = Publishing.adapter_for_platform(variant.platform)
 
-    attempt_attrs = %{
-      slot_id: slot.id,
-      adapter_name: inspect(adapter),
-      attempted_at: DateTime.utc_now(),
-      status: "pending"
-    }
+    # Railway-Oriented Publishing Guard Pipeline:
+    # 1. Validate platform constraints defense-in-depth on variant schema
+    # 2. Acquire pending publish attempt claim
+    # 3. Dispatch to platform adapter
+    with :ok <- Content.Variant.validate_platform_constraints(variant),
+         {:ok, attempt} <- claim_publish_attempt(slot, adapter) do
+      publish_with_adapter(adapter, slot, variant, attempt, opts)
+    else
+      {:error, {:constraint_violation, _}} = err ->
+        err
 
-    # The pending attempt acts as a claim: the partial unique index rejects a
-    # second concurrent claim before the adapter is ever called.
-    case Publishing.create_publish_attempt(attempt_attrs) do
-      {:ok, attempt} ->
-        publish_with_adapter(adapter, slot, variant, attempt, opts)
+      {:error, violations} when is_list(violations) ->
+        handle_pre_publish_constraint_violation(slot, adapter, violations)
 
       {:error, %Ecto.Changeset{} = changeset} ->
         if Keyword.has_key?(changeset.errors, :slot_id) do
@@ -67,7 +67,39 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
         else
           {:error, changeset}
         end
+
+      {:error, reason} ->
+        {:error, reason}
     end
+  end
+
+  defp claim_publish_attempt(slot, adapter) do
+    attempt_attrs = %{
+      slot_id: slot.id,
+      adapter_name: inspect(adapter),
+      attempted_at: DateTime.utc_now(),
+      status: "pending"
+    }
+
+    Publishing.create_publish_attempt(attempt_attrs)
+  end
+
+  defp handle_pre_publish_constraint_violation(slot, adapter, violations) do
+    violation_msg = "Constraint violation at publish time: #{inspect(violations)}"
+
+    # Record failed attempt directly for defense-in-depth audit trail
+    Publishing.create_publish_attempt(%{
+      slot_id: slot.id,
+      adapter_name: inspect(adapter),
+      attempted_at: DateTime.utc_now(),
+      status: "failure",
+      error_message: violation_msg
+    })
+
+    # Transition slot to failed status
+    Publishing.update_slot(slot, %{status: "failed"})
+
+    {:error, {:constraint_violation, violations}}
   end
 
   defp publish_with_adapter(adapter, slot, variant, attempt, opts) do

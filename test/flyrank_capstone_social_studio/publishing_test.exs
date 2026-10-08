@@ -232,6 +232,35 @@ defmodule FlyrankCapstoneSocialStudio.PublishingTest do
       assert Enum.any?(results, &match?({:ok, %PublishAttempt{status: "success"}}, &1))
       assert [%PublishAttempt{status: "success"}] = attempts_for(slot)
     end
+
+    @tag :error_handling
+    test "pre-publish guard blocks dispatch when variant content violates platform constraints",
+         %{
+           slot: slot,
+           variant: variant
+         } do
+      # Simulate an out-of-band mutation (direct DB update or decorator payload expansion)
+      # that exceeds the 280-char limit for mock_x
+      invalid_content = String.duplicate("Too long text for Twitter. ", 20)
+
+      Repo.update_all(
+        from(v in Content.Variant, where: v.id == ^variant.id),
+        set: [content: invalid_content]
+      )
+
+      assert {:error, {:constraint_violation, violations}} = Publishing.dispatch_slot(slot)
+      assert :content_too_long in violations
+
+      # Assert slot marked failed
+      assert Publishing.get_slot!(slot.id).status == "failed"
+
+      # Assert failed attempt recorded with defense-in-depth explanation
+      attempts = attempts_for(slot)
+      assert length(attempts) == 1
+      [attempt] = attempts
+      assert attempt.status == "failure"
+      assert attempt.error_message =~ "Constraint violation at publish time"
+    end
   end
 
   describe "Audit History Behavior: attempts are recorded and preloaded" do

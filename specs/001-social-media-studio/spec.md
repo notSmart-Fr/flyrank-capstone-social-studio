@@ -42,18 +42,19 @@ As an editor or marketing manager, I want to review, edit, approve, or reject dr
 
 ---
 
-### User Story 3 - Idempotent Multi-Platform Publishing (Priority: P3)
+### User Story 3 - Idempotent Multi-Platform Publishing & Pre-Publish Guard (Priority: P3)
 
-As a social media manager, I want scheduled posts to be published through an extensible adapter layer that guarantees exactly-once delivery, so that network retries or worker restarts never post duplicate messages to audience feeds.
+As a social media manager, I want scheduled posts to be published through an extensible adapter layer that guarantees exactly-once delivery and performs a pre-publish defense-in-depth constraint check, so that network retries never post duplicate messages and variants that became invalid out-of-band never trigger external API errors.
 
-**Why this priority**: Idempotency and resilient delivery are the core technical requirements that differentiate an enterprise-grade publishing system from basic scripts.
+**Why this priority**: Idempotency and resilient delivery are the core technical requirements that differentiate an enterprise-grade publishing system from basic scripts. Adding pre-dispatch defense-in-depth ensures bad payloads never reach platform APIs.
 
-**Independent Test**: Can be tested by executing duplicate dispatch attempts for the same scheduled slot or abruptly stopping and restarting a background worker mid-batch; the external platform receives exactly one post, and duplicate calls return cached success without second API calls.
+**Independent Test**: Can be tested by executing duplicate dispatch attempts for the same scheduled slot, or testing dispatch of an approved slot whose variant has been altered to exceed platform limits; the system verifies constraints before network transmission, records constraint failures in the audit log, and duplicate calls return cached success without second API calls.
 
 **Acceptance Scenarios**:
-1. **Given** an approved and scheduled slot, **When** the publishing time arrives, **Then** the system delivers the variant to the designated platform adapter and transitions the slot to `published`.
-2. **Given** a slot that has already been published, **When** a duplicate dispatch or network retry occurs, **Then** the system detects the existing execution, creates zero new posts, and returns the previous successful result.
-3. **Given** an external platform returns a rate-limit error (HTTP 429) with a retry duration, **When** the dispatcher handles the response, **Then** the system defers execution for the requested duration without failing the slot permanently.
+1. **Given** an approved and scheduled slot, **When** the publishing time arrives, **Then** the system validates platform constraints before touching the network, delivers compliant variants to the designated platform adapter, and transitions the slot to `published`.
+2. **Given** an approved variant in a scheduled slot whose content violates platform constraints at dispatch time (e.g. from out-of-band edits, platform rule revisions, or decorator extensions), **When** dispatch executes, **Then** the pre-publish guard halts dispatch before contacting the network, marks the slot as `failed`, records the violation in the publish attempt audit log, and returns an explanatory constraint violation error without failing unrecoverably.
+3. **Given** a slot that has already been published, **When** a duplicate dispatch or network retry occurs, **Then** the system detects the existing execution, creates zero new posts, and returns the previous successful result.
+4. **Given** an external platform returns a rate-limit error (HTTP 429) with a retry duration, **When** the dispatcher handles the response, **Then** the system defers execution for the requested duration without failing the slot permanently.
 
 ---
 
@@ -116,6 +117,8 @@ As a growth marketer using AI-assisted copywriting, I want to receive dual candi
 - **FR-015**: System MUST verify factual grounding of generated variants against source text and flag unsupported claims via an asynchronous, idempotent verification worker with live UI spinner states.
 - **FR-016**: System MUST track AI token consumption, calculate exact monetary cost per campaign using Decimal arithmetic, and compute a dynamic Grounding Pass Rate on the system analytics dashboard.
 - **FR-017**: System MUST maintain clean secret management, loading API tokens strictly from environment variables without committing credentials.
+- **FR-018**: System MUST execute a pre-publish constraint guard right before dispatching to any platform adapter (defense-in-depth), preventing variants with corrupted, oversized, or non-compliant content from reaching the network. If constraints fail, the system MUST mark the slot as `failed` and log the constraint failure in the audit log without crashing the background worker.
+- **FR-019**: For Telegram publishing, system MUST enforce platform limits including the 4,096 character UTF-8 message ceiling and use safe formatting (`parse_mode: "HTML"`) to prevent parse errors from unescaped markdown symbols.
 
 ---
 
@@ -139,6 +142,7 @@ As a growth marketer using AI-assisted copywriting, I want to receive dual candi
 - **SC-004 (Exactly-Once Publishing)**: 0% duplicate posts across identical slots under simulated network retries, duplicate requests, or worker crash-recovery cycles.
 - **SC-005 (Adapter Independence)**: Platform adapters can be swapped or redirected via configuration changes with zero modifications to application domain code.
 - **SC-006 (Audit Completeness)**: 100% of dispatch attempts produce a permanent audit history entry detailing execution outcome and external identifiers.
+- **SC-007 (Pre-Publish Guard Integrity)**: 100% of invalid or constraint-violating variants are intercepted before contacting the external network, recording a failure audit log and transitioning the slot to `failed` without worker crashes.
 
 ---
 
