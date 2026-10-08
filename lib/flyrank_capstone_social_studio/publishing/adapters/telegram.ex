@@ -47,6 +47,9 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
         {:ok, %{status: 200, body: %{"ok" => true, "result" => %{"message_id" => msg_id}}}} ->
           {:ok, %{external_id: to_string(msg_id), raw_response: "Published to Telegram"}}
 
+        {:ok, %{status: 429} = response} ->
+          handle_rate_limit(response)
+
         {:ok, %{status: status, body: response_body}} ->
           {:error, "Telegram API HTTP #{status}: #{inspect(response_body)}"}
 
@@ -58,4 +61,29 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
        "Telegram credentials are missing: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required"}
     end
   end
+
+  defp handle_rate_limit(%{body: body} = response) do
+    retry_after =
+      case Req.Response.get_header(response, "retry-after") do
+        [val | _] -> parse_seconds(val)
+        [] -> get_in(body, ["parameters", "retry_after"])
+      end
+
+    if is_integer(retry_after) and retry_after > 0 do
+      {:error, {:rate_limited, retry_after}}
+    else
+      {:error, "Telegram API HTTP 429: #{inspect(body)}"}
+    end
+  end
+
+  defp parse_seconds(val) when is_integer(val), do: val
+
+  defp parse_seconds(val) when is_binary(val) do
+    case Integer.parse(String.trim(val)) do
+      {seconds, _} when seconds > 0 -> seconds
+      _ -> nil
+    end
+  end
+
+  defp parse_seconds(_), do: nil
 end

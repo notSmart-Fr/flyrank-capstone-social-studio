@@ -97,6 +97,9 @@ defmodule FlyrankCapstoneSocialStudio.ContentTest do
   end
 
   describe "Constraint Verification Behavior" do
+    @describetag :content_ingestion
+    @describetag :constraint_profiles
+
     # -------------------------------------------------------------------------
     # 4. Constraint Profile Failures
     # -------------------------------------------------------------------------

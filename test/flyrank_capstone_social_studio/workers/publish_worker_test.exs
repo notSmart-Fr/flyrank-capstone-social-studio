@@ -103,4 +103,24 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorkerTest do
       refute_receive {:slot_failed, _, _}
     end
   end
+
+  describe "Worker Rate Limiting & Retry-After Snooze Behavior" do
+    @describetag :publishing
+    @describetag :publish_worker
+
+    test "when adapter encounters rate limit with retry_after, worker snoozes for that duration",
+         %{
+           slot: slot
+         } do
+      defmodule RateLimitedPublisher do
+        @behaviour FlyrankCapstoneSocialStudio.Publishing.SocialPublisher
+        @impl true
+        def publish(_content, _opts \\ []), do: {:error, {:rate_limited, 60}}
+      end
+
+      FailingPublisher.swap_adapter!(:mock_x, RateLimitedPublisher)
+
+      assert {:snooze, 60} = perform_job(PublishWorker, %{"slot_id" => slot.id})
+    end
+  end
 end

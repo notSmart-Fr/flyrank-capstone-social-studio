@@ -124,6 +124,19 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
       assert {:error, "Telegram API HTTP 429" <> _} = Telegram.publish("Hello TG")
     end
 
+    test "rate limiting (HTTP 429) parses Retry-After header and returns rate_limited tuple", %{
+      bypass: bypass
+    } do
+      Bypass.expect_once(bypass, "POST", "/bottest-token/sendMessage", fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("retry-after", "45")
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.resp(429, Jason.encode!(%{ok: false, description: "Too Many Requests"}))
+      end)
+
+      assert {:error, {:rate_limited, 45}} = Telegram.publish("Hello TG")
+    end
+
     test "a network failure is returned as an error", %{bypass: bypass} do
       Bypass.down(bypass)
 
@@ -169,6 +182,8 @@ defmodule FlyrankCapstoneSocialStudio.AdapterTest do
   # AI Provider Adapter Seam Tests
   # ===========================================================================
   describe "AI Provider Adapter Seam" do
+    @describetag :adapters
+    @describetag :ai_generation
     test "AiGenerator resolves configured default AI adapter" do
       configured_adapter = Application.get_env(:flyrank_capstone_social_studio, :ai_adapter)
 

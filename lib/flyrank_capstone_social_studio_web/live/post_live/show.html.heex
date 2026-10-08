@@ -1,7 +1,6 @@
 <div class="space-y-6">
   <!-- SECTION 1 & 2: HEADER SLICE -->
   <InspectorHeader.render post={@post} />
-
   <!-- SECTION 3: SPLIT INSPECTION LAYOUT -->
   <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
     <!-- LEFT PANE: ORIGINAL SOURCE CONTENT -->
@@ -13,7 +12,7 @@
         <.icon name="hero-document-text-micro" class="w-4 h-4 text-primary-600" />
         Original Ingested Source
       </.h3>
-
+      
       <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 h-[calc(100%-2rem)]">
         <.card_content class="p-4 space-y-4">
           <div class="p-3 bg-gray-50 dark:bg-gray-950 rounded border border-gray-100 dark:border-gray-800 text-xs font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap max-h-125 overflow-y-auto">
@@ -22,7 +21,6 @@
         </.card_content>
       </.card>
     </section>
-
     <!-- RIGHT PANE: VARIANT EDITOR SLICE -->
     <section aria-labelledby="variants-heading" class="lg:col-span-7 space-y-3">
       <.h3
@@ -32,7 +30,7 @@
         <.icon name="hero-sparkles-micro" class="w-4 h-4 text-primary-600" />
         Social Variants & Editor
       </.h3>
-
+      
       <VariantAction.variant_action
         post={@post}
         current_variant={@current_variant}
@@ -44,7 +42,6 @@
       />
     </section>
   </div>
-
   <!-- A/B SELECTION MODAL SLICE -->
   <AiAction.ai_action
     show={@show_ab_modal}

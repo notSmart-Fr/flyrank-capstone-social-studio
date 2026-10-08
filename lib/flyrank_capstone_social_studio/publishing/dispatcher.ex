@@ -86,11 +86,22 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Dispatcher do
 
         {:ok, updated_attempt}
 
+      {:error, {:rate_limited, seconds}} ->
+        {:ok, _updated_attempt} =
+          Publishing.update_publish_attempt(attempt, %{
+            status: "failure",
+            error_message: "Rate limited. Retry after #{seconds}s"
+          })
+
+        {:error, {:rate_limited, seconds}}
+
       {:error, reason} ->
+        error_str = if is_binary(reason), do: reason, else: inspect(reason)
+
         {:ok, updated_attempt} =
           Publishing.update_publish_attempt(attempt, %{
             status: "failure",
-            error_message: reason
+            error_message: error_str
           })
 
         Publishing.update_slot(slot, %{status: "failed"})

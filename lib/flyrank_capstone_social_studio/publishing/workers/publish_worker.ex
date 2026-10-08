@@ -10,7 +10,8 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker do
   alias FlyrankCapstoneSocialStudio.PubSub
 
   @impl Oban.Worker
-  @spec perform(Oban.Job.t()) :: :ok | {:error, binary()} | {:cancel, atom()}
+  @spec perform(Oban.Job.t()) ::
+          :ok | {:error, binary()} | {:cancel, atom()} | {:snooze, pos_integer()}
   def perform(%Oban.Job{args: %{"slot_id" => slot_id}}) do
     Logger.info("⚙️ [PUBLISH WORKER] Starting execution for slot_id: #{slot_id}")
 
@@ -34,6 +35,21 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Workers.PublishWorker do
       {:error, :concurrent_request_in_flight} ->
         Logger.info("⏭️ [PUBLISH WORKER] Slot #{slot_id} is being published by another job")
         {:cancel, :concurrent_request_in_flight}
+
+      {:error, {:rate_limited, seconds}} ->
+        Logger.warning(
+          "⏳ [PUBLISH WORKER RATE LIMITED] Slot #{slot_id} rate limited. Snoozing for #{seconds}s"
+        )
+
+        Phoenix.PubSub.broadcast(PubSub, "publishing:events", {:slot_rate_limited, slot, seconds})
+
+        Phoenix.PubSub.broadcast(
+          PubSub,
+          "post:#{slot.variant.post_id}",
+          {:slot_rate_limited, slot, seconds}
+        )
+
+        {:snooze, seconds}
 
       {:error, reason} ->
         error_msg = extract_error_message(reason)
