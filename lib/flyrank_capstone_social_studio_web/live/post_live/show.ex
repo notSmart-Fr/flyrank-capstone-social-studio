@@ -30,6 +30,10 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
      |> assign(:show_schedule_modal, false)
      |> assign(:publishing_variant_id, nil)
      |> assign(:generating, PostQuery.oban_generating?(post.id, active_tab))
+     |> assign(
+       :verifying,
+       (current_variant && PostQuery.oban_verifying?(current_variant.id)) || false
+     )
      |> assign(:canonical_selected, PostQuery.has_ai_variant?(post.variants, active_tab))}
   end
 
@@ -130,4 +134,12 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Show do
   @impl true
   def handle_info({:ai_generation_failed, payload}, socket),
     do: AiAction.handle_generation_failed(socket, payload)
+
+  @impl true
+  def handle_info({:grounding_verified, updated_variant}, socket),
+    do: VariantAction.handle_grounding_verified(socket, updated_variant)
+
+  @impl true
+  def handle_info({:grounding_verification_failed, payload}, socket),
+    do: VariantAction.handle_grounding_verification_failed(socket, payload)
 end

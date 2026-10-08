@@ -36,6 +36,18 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Queries.PostQuery do
     Repo.exists?(query)
   end
 
+  def oban_verifying?(variant_id) when is_nil(variant_id), do: false
+
+  def oban_verifying?(variant_id) do
+    query =
+      from job in Oban.Job,
+        where: job.queue == "default",
+        where: fragment("args->>'variant_id' = ?", ^to_string(variant_id)),
+        where: job.state in ["available", "executing", "retryable"]
+
+    Repo.exists?(query)
+  end
+
   def has_ai_variant?(variants, platform) do
     (variants || [])
     |> Enum.filter(&(Map.get(&1, :platform) == platform))

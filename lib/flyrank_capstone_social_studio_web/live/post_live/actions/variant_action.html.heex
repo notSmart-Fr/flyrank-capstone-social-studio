@@ -132,19 +132,29 @@
               </.button>
 
               <%= if Map.get(@current_variant, :id) do %>
-                <.button
-                  type="button"
-                  phx-click="verify_grounding"
-                  phx-value-id={@current_variant.id}
-                  color="gray"
-                  variant="outline"
-                  size="xs"
-                  class="cursor-pointer"
-                  title="Verify factual claims against source content"
-                >
-                  <.icon name="hero-shield-check-micro" class="w-4 h-4 mr-1 text-primary-600" />
-                  Verify Grounding
-                </.button>
+                <%= if assigns[:verifying] do %>
+                  <div class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-primary-700 bg-primary-50 dark:bg-primary-950/50 rounded-md border border-primary-200 dark:border-primary-800 animate-pulse">
+                    <.icon
+                      name="hero-arrow-path-micro"
+                      class="w-3.5 h-3.5 animate-spin text-primary-600"
+                    />
+                    <span>Verifying Grounding...</span>
+                  </div>
+                <% else %>
+                  <.button
+                    type="button"
+                    phx-click="verify_grounding"
+                    phx-value-id={@current_variant.id}
+                    color="gray"
+                    variant="outline"
+                    size="xs"
+                    class="cursor-pointer"
+                    title="Verify factual claims against source content"
+                  >
+                    <.icon name="hero-shield-check-micro" class="w-4 h-4 mr-1 text-primary-600" />
+                    Verify Grounding
+                  </.button>
+                <% end %>
 
                 <button
                   type="button"

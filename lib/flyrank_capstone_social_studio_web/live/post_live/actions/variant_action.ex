@@ -18,6 +18,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction do
     post = socket.assigns.post
     current_variant = PostQuery.find_variant_for_platform(post.variants, tab_name)
     generating = PostQuery.oban_generating?(post.id, tab_name)
+    verifying = current_variant && PostQuery.oban_verifying?(current_variant.id)
 
     {:noreply,
      socket
@@ -27,6 +28,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction do
      |> assign(:is_unsaved_ai_draft, false)
      |> assign(:show_ab_modal, false)
      |> assign(:generating, generating)
+     |> assign(:verifying, verifying || false)
      |> assign(:canonical_selected, PostQuery.has_ai_variant?(post.variants, tab_name))}
   end
 
@@ -117,30 +119,60 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.VariantAction do
   end
 
   def verify_grounding(socket, variant_id) do
-    variant = Content.get_variant!(variant_id)
+    if PostQuery.oban_verifying?(variant_id) do
+      {:noreply,
+       socket
+       |> assign(:verifying, true)
+       |> put_flash(:info, "Grounding verification is already running for this variant.")}
+    else
+      case %{variant_id: variant_id}
+           |> FlyrankCapstoneSocialStudio.Content.Workers.VerifyGroundingWorker.new()
+           |> Oban.insert() do
+        {:ok, _job} ->
+          {:noreply,
+           socket
+           |> assign(:verifying, true)
+           |> put_flash(:info, "🔍 Grounding audit queued... Verifying claims against source.")}
 
-    case Content.verify_variant_grounding(variant) do
-      {:ok, updated_variant} ->
-        post = PostQuery.get_post_details(socket.assigns.post.id)
-
-        msg =
-          case updated_variant.status do
-            "draft" -> "Grounding verified! Variant claims are supported by source text."
-            "rejected" -> "Grounding audit failed: Unsupported claims detected."
-            "needs_review" -> "Grounding audit incomplete: #{updated_variant.rejection_reason}"
-            _ -> "Grounding check complete."
-          end
-
-        flash_type = if updated_variant.status == "draft", do: :info, else: :error
-
-        {:noreply,
-         socket
-         |> assign(:post, post)
-         |> assign(:current_variant, updated_variant)
-         |> put_flash(flash_type, msg)}
-
-      {:error, _reason} ->
-        {:noreply, put_flash(socket, :error, "Could not run grounding audit.")}
+        {:error, reason} ->
+          {:noreply,
+           socket
+           |> assign(:verifying, false)
+           |> put_flash(:error, "Could not queue grounding verification: #{inspect(reason)}")}
+      end
     end
+  end
+
+  def handle_grounding_verified(socket, updated_variant) do
+    post = PostQuery.get_post_details(socket.assigns.post.id)
+
+    active_variant =
+      if socket.assigns.current_variant && socket.assigns.current_variant.id == updated_variant.id,
+        do: updated_variant,
+        else: socket.assigns.current_variant
+
+    msg =
+      case updated_variant.status do
+        "draft" -> "✅ Grounding verified! All claims are supported by source text."
+        "rejected" -> "❌ Grounding audit failed: Unsupported claims detected."
+        "needs_review" -> "⚠️ Grounding audit incomplete: #{updated_variant.rejection_reason}"
+        _ -> "Grounding check complete."
+      end
+
+    flash_type = if updated_variant.status == "draft", do: :info, else: :error
+
+    {:noreply,
+     socket
+     |> assign(:post, post)
+     |> assign(:current_variant, active_variant)
+     |> assign(:verifying, false)
+     |> put_flash(flash_type, msg)}
+  end
+
+  def handle_grounding_verification_failed(socket, %{reason: reason}) do
+    {:noreply,
+     socket
+     |> assign(:verifying, false)
+     |> put_flash(:error, "Grounding verification failed: #{reason}")}
   end
 end

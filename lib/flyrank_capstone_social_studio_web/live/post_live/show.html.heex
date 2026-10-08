@@ -12,7 +12,7 @@
         <.icon name="hero-document-text-micro" class="w-4 h-4 text-primary-600" />
         Original Ingested Source
       </.h3>
-      
+
       <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 h-[calc(100%-2rem)]">
         <.card_content class="p-4 space-y-4">
           <div class="p-3 bg-gray-50 dark:bg-gray-950 rounded border border-gray-100 dark:border-gray-800 text-xs font-mono text-gray-800 dark:text-gray-200 whitespace-pre-wrap max-h-125 overflow-y-auto">
@@ -30,12 +30,13 @@
         <.icon name="hero-sparkles-micro" class="w-4 h-4 text-primary-600" />
         Social Variants & Editor
       </.h3>
-      
+
       <VariantAction.variant_action
         post={@post}
         current_variant={@current_variant}
         active_tab={@active_tab}
         generating={@generating}
+        verifying={@verifying}
         canonical_selected={@canonical_selected}
         show_schedule_modal={@show_schedule_modal}
         publishing_variant_id={@publishing_variant_id}
