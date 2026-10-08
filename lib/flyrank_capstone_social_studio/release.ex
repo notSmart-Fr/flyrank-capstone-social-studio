@@ -14,6 +14,23 @@ defmodule FlyrankCapstoneSocialStudio.Release do
     end
   end
 
+  @spec seed() :: any()
+  def seed do
+    load_app()
+
+    for repo <- repos() do
+      {:ok, _, _} =
+        Ecto.Migrator.with_repo(repo, fn _repo ->
+          priv_dir = Application.app_dir(@app, "priv")
+          seed_script = Path.join([priv_dir, "repo", "seeds.exs"])
+
+          if File.exists?(seed_script) do
+            Code.eval_file(seed_script)
+          end
+        end)
+    end
+  end
+
   @spec rollback(atom(), any()) :: {:ok, any(), any()}
   def rollback(repo, version) do
     load_app()

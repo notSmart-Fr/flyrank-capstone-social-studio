@@ -118,6 +118,25 @@ docker compose down -v
 
 The Compose configuration provides the database URL, Phoenix port, and database migrations automatically. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in a `.env` file in the repository root when using the live Telegram adapter.
 
+### Seed Sample Data
+
+To populate the database with a pre-configured sample blog post, platform variants in multiple lifecycle states (`approved`, `draft`, `published`), a scheduled slot, and audit history:
+
+**If running locally with Mix:**
+```bash
+mix run priv/repo/seeds.exs
+```
+
+**If running inside Docker:**
+```bash
+docker compose exec web /app/bin/migrate seed
+```
+*(Or via eval: `docker compose exec web /app/bin/server eval "FlyrankCapstoneSocialStudio.Release.seed"`)*
+
+Once seeded, you can view the campaign directly in the browser at `http://localhost:4000`, explore publishing history at `http://localhost:4000/publishing/history`, and check system telemetry at `http://localhost:4000/analytics`.
+
+---
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
@@ -131,8 +150,19 @@ The Compose configuration provides the database URL, Phoenix port, and database 
 | `POST` | `/api/slots/:id/publish` | Triggers immediate idempotent dispatch. |
 | `GET` | `/api/publishing/history` | Returns the audit trail of publication attempts. |
 
-The focused behavior test commands for each feature are listed in the guides linked
-above.
+The focused behavior test commands for each feature are listed in the guides linked above. Interactive OpenAPI documentation is also served via Scalar at `http://localhost:4000/api/scalar`.
+
+---
+
+## Known Limitations
+
+In accordance with the Capstone Brief requirements:
+1. **Target Platforms:** Real publication is intentionally implemented for Telegram (via Telegram Bot API) as the free target platform. Platforms without free, non-credit-card bot developer tiers (X / Twitter and LinkedIn) use local mock adapters (`MockX` and `MockLinkedIn`) that simulate exact payload serialization and store previews locally.
+2. **AI Provider Rate Limits:** Google Gemini free tier has per-minute request rate limits. If `GEMINI_API_KEY` is omitted or rate-limited, the system falls back gracefully to deterministic local templates without disrupting core ingestion.
+3. **Multi-Tenancy:** The current database design is optimized for a single workspace/team per deployment instance; workspace/tenant isolation is defined as a stretch goal.
+
+---
+
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
