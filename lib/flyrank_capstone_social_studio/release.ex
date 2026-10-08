@@ -19,15 +19,15 @@ defmodule FlyrankCapstoneSocialStudio.Release do
     load_app()
 
     for repo <- repos() do
-      {:ok, _, _} =
-        Ecto.Migrator.with_repo(repo, fn _repo ->
-          priv_dir = Application.app_dir(@app, "priv")
-          seed_script = Path.join([priv_dir, "repo", "seeds.exs"])
+      {:ok, _, _} = Ecto.Migrator.with_repo(repo, &run_seed/1)
+    end
+  end
 
-          if File.exists?(seed_script) do
-            Code.eval_file(seed_script)
-          end
-        end)
+  defp run_seed(_repo) do
+    seed_script = Path.join([Application.app_dir(@app, "priv"), "repo", "seeds.exs"])
+
+    if File.exists?(seed_script) do
+      Code.eval_file(seed_script)
     end
   end
 

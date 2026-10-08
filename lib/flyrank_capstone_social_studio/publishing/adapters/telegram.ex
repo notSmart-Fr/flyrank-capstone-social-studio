@@ -12,6 +12,16 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
   """
   @impl true
   def publish(content, opts \\ []) do
+    case resolve_credentials(opts) do
+      {:ok, token, chat_id} ->
+        post_to_telegram(token, chat_id, content)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp resolve_credentials(opts) do
     token =
       System.get_env("TELEGRAM_BOT_TOKEN") ||
         Application.get_env(:flyrank_capstone_social_studio, :telegram_bot_token)
@@ -22,43 +32,45 @@ defmodule FlyrankCapstoneSocialStudio.Publishing.Adapters.Telegram do
         Application.get_env(:flyrank_capstone_social_studio, :telegram_chat_id)
 
     if token && chat_id do
-      base_url =
-        Application.get_env(
-          :flyrank_capstone_social_studio,
-          :telegram_base_url,
-          "https://api.telegram.org"
-        )
-
-      url = "#{base_url}/bot#{token}/sendMessage"
-
-      payload = %{
-        chat_id: chat_id,
-        text: content,
-        # Enables bold, italic, and links in Telegram
-        parse_mode: "Markdown"
-      }
-
-      # Req handles JSON encoding and content-type headers automatically via `json:`
-      case Req.post(url,
-             json: payload,
-             finch: [name: FlyrankCapstoneSocialStudio.Finch],
-             retry: false
-           ) do
-        {:ok, %{status: 200, body: %{"ok" => true, "result" => %{"message_id" => msg_id}}}} ->
-          {:ok, %{external_id: to_string(msg_id), raw_response: "Published to Telegram"}}
-
-        {:ok, %{status: 429} = response} ->
-          handle_rate_limit(response)
-
-        {:ok, %{status: status, body: response_body}} ->
-          {:error, "Telegram API HTTP #{status}: #{inspect(response_body)}"}
-
-        {:error, reason} ->
-          {:error, "Network failure: #{inspect(reason)}"}
-      end
+      {:ok, token, chat_id}
     else
       {:error,
        "Telegram credentials are missing: TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required"}
+    end
+  end
+
+  defp post_to_telegram(token, chat_id, content) do
+    base_url =
+      Application.get_env(
+        :flyrank_capstone_social_studio,
+        :telegram_base_url,
+        "https://api.telegram.org"
+      )
+
+    url = "#{base_url}/bot#{token}/sendMessage"
+
+    payload = %{
+      chat_id: chat_id,
+      text: content,
+      parse_mode: "Markdown"
+    }
+
+    case Req.post(url,
+           json: payload,
+           finch: [name: FlyrankCapstoneSocialStudio.Finch],
+           retry: false
+         ) do
+      {:ok, %{status: 200, body: %{"ok" => true, "result" => %{"message_id" => msg_id}}}} ->
+        {:ok, %{external_id: to_string(msg_id), raw_response: "Published to Telegram"}}
+
+      {:ok, %{status: 429} = response} ->
+        handle_rate_limit(response)
+
+      {:ok, %{status: status, body: response_body}} ->
+        {:error, "Telegram API HTTP #{status}: #{inspect(response_body)}"}
+
+      {:error, reason} ->
+        {:error, "Network failure: #{inspect(reason)}"}
     end
   end
 

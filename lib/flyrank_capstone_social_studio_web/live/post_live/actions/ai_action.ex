@@ -83,9 +83,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.PostLive.Actions.AiAction do
 
       {:error, changeset} ->
         error_msg =
-          changeset.errors
-          |> Enum.map(fn {field, {msg, _}} -> "#{field} #{msg}" end)
-          |> Enum.join(", ")
+          Enum.map_join(changeset.errors, ", ", fn {field, {msg, _}} -> "#{field} #{msg}" end)
 
         {:noreply, put_flash(socket, :error, "Failed to persist selected variant: #{error_msg}")}
     end
