@@ -17,10 +17,10 @@ The system is built on OTP concurrency primitives, PostgreSQL with Ecto, Oban du
   - Enforces domain **Constraint Profiles** (character length caps, hashtag quotas, tone rules, and parse modes like HTML) via typed schemas.
   - Generates A/B candidate variants with Google Gemini 2.5 Flash and computes exact financial cost accounting using `Decimal` arithmetic.
   - Enforces factual grounding audits via `VerifyGroundingWorker` to prevent AI hallucinations.
-  - Implements **Railway-Oriented Programming (ROP)** validation (`Variant.validate_platform_constraints/2`) with typed violation tagging.
+  - Implements validation (`Variant.validate_platform_constraints/2`) with typed violation tagging.
 - **Publishing Context (`FlyrankCapstoneSocialStudio.Publishing`):**
   - **Human-in-the-Loop Review Gate:** Enforces that only variants in `approved` status can be scheduled or dispatched; unapproved attempts are rejected with HTTP 403 Forbidden.
-  - **Defense-in-Depth Pre-Publish Guard:** Dispatches pass through a pre-flight ROP constraint verification right before contacting external networks, intercepting out-of-band mutations, rule changes, or UTM decorator expansions without crashing worker queues.
+  - **Defense-in-Depth Pre-Publish Guard:** Dispatches pass through a pre-flight constraint verification right before contacting external networks, intercepting out-of-band mutations, rule changes, or UTM decorator expansions without crashing worker queues.
   - **Durable Scheduling & Snooze:** Schedules publication slots backed by Oban. Parses upstream HTTP 429 `Retry-After` headers and snoozes background retries dynamically.
   - **Hardware-Level Idempotency:** Protects slot execution using transactional locks (`SELECT FOR UPDATE`), incoming `Idempotency-Key` headers, and a PostgreSQL partial unique index on `publish_attempts (slot_id) WHERE status = 'success'`.
   - **Pluggable Adapter Seam:** Decoupled `SocialPublisher` behavior resolving adapters dynamically from configuration without touching domain logic. Ships with a real Telegram adapter (enforcing the 4,096 character UTF-8 message ceiling and safe HTML entity parsing) and mock adapters (`MockX`, `MockLinkedIn`).
@@ -63,7 +63,7 @@ flowchart TD
     subgraph PublishPipeline["3. Durable Publishing & Defense-in-Depth"]
         direction TB
         PublishWorker["Oban: PublishWorker\n(Durable Queue & Rate-Limit Snooze)"]
-        PrePublishGuard["Pre-Publish Guard (ROP)\n(Defense-in-Depth Constraint Verification)"]
+        PrePublishGuard["Pre-Publish Guard \n(Defense-in-Depth Constraint Verification)"]
         IdempotentDispatcher["Idempotent Dispatcher\n(Partial Unique Index & Claim Lock)"]
         
         PublishWorker --> PrePublishGuard --> IdempotentDispatcher
