@@ -83,9 +83,22 @@ defmodule FlyrankCapstoneSocialStudioWeb.Telemetry do
       # ===================================================================
       # ADDED: OBAN BACKGROUND JOB METRICS
       # ===================================================================
-      counter("oban.job.stop.count", tags: [:worker, :state]),
-      summary("oban.job.stop.duration", unit: {:native, :millisecond}, tags: [:worker]),
-      counter("oban.job.exception.count", tags: [:worker]),
+      counter("oban.job.stop.count",
+        tags: [:worker, :state],
+        tag_values: &extract_oban_tags/1,
+        description: "Count of completed Oban jobs"
+      ),
+      summary("oban.job.stop.duration",
+        unit: {:native, :millisecond},
+        tags: [:worker],
+        tag_values: &extract_oban_tags/1,
+        description: "Execution duration of Oban jobs"
+      ),
+      counter("oban.job.exception.count",
+        tags: [:worker],
+        tag_values: &extract_oban_tags/1,
+        description: "Count of failed Oban jobs with exceptions"
+      ),
 
       # ===================================================================
       # ADDED: REQ EXTERNAL HTTP METRICS (Gemini / Telegram / API Calls)
@@ -101,5 +114,17 @@ defmodule FlyrankCapstoneSocialStudioWeb.Telemetry do
       # This function must call :telemetry.execute/3 and a metric must be added above.
       # {FlyrankCapstoneSocialStudioWeb, :count_users, []}
     ]
+  end
+
+  defp extract_oban_tags(metadata) do
+    worker =
+      case metadata do
+        %{job: %{worker: w}} -> w
+        _ -> "unknown"
+      end
+
+    state = Map.get(metadata, :state, :unknown)
+
+    %{worker: worker, state: state}
   end
 end
