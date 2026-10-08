@@ -1,89 +1,56 @@
-# BUILDLOG: Engineering Journey & AI Usage Log
+# BUILDLOG.md: AI Pairing & Engineering Decisions
 
-> **FlyRank Capstone Brief Section 8 Rule:**  
-> *"Your AI-usage log: where AI helped, where it was wrong, what you changed. Honesty is graded, perfection is not. You must be able to explain each line of your code."*
-
----
-
-## 1. Executive Summary & Tooling Used
-
-* **Primary AI Coding Assistant:** Antigravity / Gemini 2.5 Flash
-* **Core Stack:** Elixir 1.20, Phoenix 1.8 (LiveView), Ecto / PostgreSQL, Oban 2.18, Tailwind CSS v4, Docker Compose
-* **Development Methodology:** Spec-first architectural design, test-driven validation (TDD with 77 ExUnit tests), and containerized deployment.
+This document details where AI assistants provided velocity, where AI suggestions were flawed or architecturally incorrect, and how domain decisions were resolved.
 
 ---
 
-## 2. Where AI Helped
+## 1. Stack & Runtime Strategy
 
-### A. Architectural Scaffolding & Phoenix 1.8 Idioms
-* **LiveView Streams & Layouts:** Rapidly set up Phoenix v1.8 LiveViews using proper `<Layouts.app flash={@flash}>`, avoiding obsolete Phoenix template conventions.
-* **OpenAPI 3.0 / Scalar Specs:** Generated type-safe `OpenApiSpex` controller operation schemas for the REST endpoints (`PostController`, `CampaignController`, `VariantController`, `SlotController`, `HealthController`).
-* **Tailwind Component Composition:** Built clean, modern UI components for the LiveView Inspector and Analytics dashboard without daisyUI dependencies.
-
-### B. Oban & Asynchronous Telemetry
-* **Job Definitions:** Structured idempotent Oban workers (`PublishWorker` and `VerifyGroundingWorker`) with strict concurrency and deduplication keys.
-* **Exact Financial Accounting:** Drafted Decimal-based arithmetic logic in `FlyrankCapstoneSocialStudio.Ai.Adapters.GeminiAdapter` to prevent floating-point drift when converting `promptTokenCount` and `candidatesTokenCount` into dollar values.
-
-### C. ExUnit Test Suite Generation
-* Generated comprehensive test cases covering tricky edge cases:
-  * Platform character and hashtag constraint violations.
-  * Attempting to schedule unapproved variants (403 HTTP boundary tests).
-  * Rate-limited `Retry-After` snooze calculations for Oban.
+* **AI Contribution:** Recommended Elixir and the BEAM ecosystem over Node.js and Python for building a resilient publishing engine. Highlighted lightweight concurrency, actor isolation, and battle-tested fault tolerance.
+* **Outcome:** The BEAM model was well-suited for stateful publishing pipelines, process supervision, and native telemetry.
 
 ---
 
-## 3. Where AI Was Wrong & Hallucinations Encountered
+## 2. Ingestion & Floki Parsing
 
-### A. State Machine & Review Workflow Oversights
-* **The Issue:** The AI initially assumed any edit on a variant should transition directly to `"accepted"` or remain in `"needs_review"`, leaving users unable to approve or schedule edited variants.
-* **The Fix:** We aligned the domain with the Capstone requirements: only valid transitions exist (`draft`, `approved`, `rejected`, `published`, and `needs_review` for audit timeouts). When a human editor manually updates a rejected or review-flagged variant, it returns to `"draft"` so it can be re-evaluated and approved.
-
-### B. Concurrency Test Collisions & KeyError in Analytics
-* **KeyError on Post Struct:** When building the Ingestion Cost Ledger on the Analytics dashboard, the AI referenced `post.content_hash` before verifying if `:content_hash` was properly added to the `Post` schema and migration, causing a runtime `KeyError 500`.
-* **Idempotency Race Conditions:** The AI initially used non-unique random keys in concurrent idempotency tests, occasionally causing test flakiness against PostgreSQL's unique constraint indexes.
-* **Platform Inclusions in Tests:** When generating unit tests for analytics, the AI used `"twitter"` instead of the configured platform atom `"mock_x"`, triggering changeset inclusion errors.
-
-### C. OpenAPI Specification & Scalar Integration
-* **The Issue:** The AI originally attempted to use dynamic runtime reflection with `OpenApiSpex`, which caused pipeline conflicts and schema drift against the async event-driven architecture.
-* **The Fix:** Shifted to a dedicated, accurate static OpenAPI 3.0 specification (`priv/static/openapi.yaml`) served directly to the Scalar API reference UI at `/api/scalar`. This guarantees exact synchronization with the REST entrypoints while avoiding runtime reflection overhead.
-
-### D. Oban Telemetry Metadata Nesting
-* **The Issue:** The AI added Oban telemetry metrics (`oban.job.stop.duration`, `oban.job.stop.count`) with top-level `:worker` tags. However, Oban nests the worker name inside the `metadata.job` struct (`metadata.job.worker`), causing Phoenix LiveDashboard to drop the metrics.
-* **The Fix:** Implemented a dedicated `extract_oban_tags/1` tag transformation function in `FlyrankCapstoneSocialStudioWeb.Telemetry` using `:tag_values`.
+* **Where AI Helped:** Accelerated initial HTML boilerplate parsing using `Floki` to extract article body text.
+* **Where AI Failed (Happy-Path Assumption):** 
+  * The initial AI-generated scraper lacked network retry handling and defensive HTTP status validation.
+  * Ingestion was initially treated as a synchronous, blocking request, failing to account for flaky remote hosts, hanging TCP connections, and upstream 500 errors.
+* **What I Changed:** Hardened the ingestion pipeline with explicit timeout guards and pre-transaction sanitization so external connection failures do not corrupt database state.
 
 ---
 
-## 4. Key Architectural Decisions & Changes Made
+## 3. Idempotency & Delivery Guarantees
 
-1. **Strict Review Gate:** Refusing to allow any unapproved variant to be scheduled at both the database schema level (`Slot.changeset/2`) and API controller boundary (`Publishing.schedule_variant/2`).
-2. **Partial Unique PostgreSQL Index for Idempotency:** Implemented a partial unique index on `publish_attempts (slot_id) WHERE status = 'success'` to guarantee that no slot can ever be dispatched more than once under concurrent workers or network retries.
-3. **Pluggable Adapter Seam:** Built `SocialPublisher` behaviour with zero business logic dependencies on whether a platform is real (Telegram) or a local simulation (Mock X, Mock LinkedIn).
-4. **Resumable Workers:** Oban-backed durable scheduling where worker crashes mid-batch resume safely without duplicate posts.
-
----
-
-## 5. Build & Setup History: Scalar, Docker & Database
-
-*(Reference log of infrastructure setup and Docker PostgreSQL volume reconciliation)*
-
-### Problem
-The Scalar API reference page loaded at `/api/scalar`, but it could not load the OpenAPI document from `/api/openapi.json`. The browser reported a 500 response from the document endpoint:
-```text
-Failed to load resource: the server responded with a status of 500
-Missing private.open_api_spex key in conn
-```
-
-### Root Causes
-1. **OpenAPI plug missing from doc routes:** Added `:docs` pipeline running `OpenApiSpex.Plug.PutApiSpec`.
-2. **OpenAPI routes had no operation metadata:** Added operation specs to all controllers.
-3. **PostgreSQL volume version alignment:** Reconciled Docker Compose image with `postgres:16-alpine` to maintain volume consistency.
+* **Where AI Failed (Incorrect Domain Solution):**
+  * **Failure 1 (Missing Network Semantics):** AI initially omitted network-level idempotency, relying on basic client calls without deduping headers.
+  * **Failure 2 (Content Hashing Misconception):** When prompted for idempotency, AI suggested deduplication via hashing the post body (`content_hash`). This confused domain uniqueness with delivery idempotency—a marketing team intentionally publishing identical text to different slots or campaigns should not be blocked.
+* **What I Changed:** Rejected body-content hashing for delivery control. Implemented true network and database-level idempotency:
+  * Supported `Idempotency-Key` headers on incoming dispatch requests.
+  * Enforced slot-level idempotency via a PostgreSQL partial unique index (`publish_attempts_active_slot_index`) and explicit transactional slot-claiming locks (`SELECT FOR UPDATE`).
 
 ---
 
-## 6. Personal Reflections & Learnings
+## 4. Asynchronous Workflow & Real-Time Feedback
 
-*(Feel free to personalize this section with your own reflections before final submission!)*
+* **Where AI Failed (Missing Lifecycle & Blocking UI):**
+  * **Failure 1 (Un-instrumented Generation):** AI generated variants and called external LLM endpoints synchronously inside LiveView process loops without progress feedback, causing UI freezes and dropped socket connections.
+  * **Failure 2 (Hardcoded Grounding Mocks):** In early LiveView prototypes, AI hardcoded grounding validation directly into the view layer rather than running it through an asynchronous domain contract. This caused generated variants to trigger constraint violations during review with no valid path to transition their status.
+* **What I Changed:** Refactored variant generation and grounding verification into dedicated asynchronous workers (`VerifyGroundingWorker`). Added real-time LiveView event streaming with clear UI loading indicators.
 
-* What surprised you most about building with Elixir / OTP?
-* How did the adapter architecture make it easier to add new platforms?
-* What was your biggest takeaway from implementing real database-level idempotency?
+---
+
+## 5. Rate Limits & Background Queueing
+
+* **Where AI Failed (Ignore Rate-Limit Metadata):**
+  * When implementing external platform publishing, AI handled failed HTTP requests with basic exponential backoff, ignoring upstream HTTP 429 `Retry-After` headers.
+* **What I Changed:** Extracted the `Retry-After` header directly inside the adapter layer, returning `{:error, {:rate_limited, seconds}}`. Wired this into Oban’s native `{:snooze, seconds}` callback so the queue sleeps for the exact time requested by the target API without exhausting attempt limits.
+
+---
+
+## 6. Spec Gap Analysis: Pre-Publish Validation
+
+* **Observation:** The brief specifies enforcing constraint profiles strictly during variant generation before human review.
+* **Identified Gap:** The pipeline did not re-evaluate constraints at publish time. If upstream character rules change or dynamic text (such as UTM parameters or tracking links) is appended at dispatch, an invalid post could reach the network.
+* **Mitigation:** Implemented secondary defense-in-depth constraint checks directly inside the adapter seam prior to payload dispatch.
