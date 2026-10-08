@@ -52,6 +52,7 @@ RUN mix assets.deploy
 # Copy runtime config and release setup
 COPY config/runtime.exs config/
 COPY rel rel
+RUN chmod -R +x rel/overlays/bin && sed -i 's/\r$//' rel/overlays/bin/*
 RUN mix release
 
 # -----------------------------------------------------------------------------
@@ -78,6 +79,7 @@ ENV MIX_ENV="prod"
 
 # Copy compiled release
 COPY --from=builder --chown=nobody:root /app/_build/${MIX_ENV}/rel/flyrank_capstone_social_studio ./
+RUN chmod -R +x /app/bin && sed -i 's/\r$//' /app/bin/*
 
 USER nobody
 
