@@ -31,12 +31,14 @@ As an editor or marketing manager, I want to review, edit, approve, or reject dr
 
 **Why this priority**: Guardrails against accidental or unauthorized publishing are non-negotiable for business credibility and safety.
 
-**Independent Test**: Can be tested by attempting to schedule variants in `draft` or `rejected` status. The system rejects the action with a 4xx client error, while allowing `approved` variants to be scheduled into calendar slots.
+**Independent Test**: Can be tested by attempting to schedule variants in `draft`, `needs_review`, or `rejected` status. The system rejects the action with an HTTP 4xx client error (403), while allowing `approved` variants to be scheduled into calendar slots.
 
 **Acceptance Scenarios**:
-1. **Given** a variant with `draft` or `rejected` status, **When** an attempt is made to schedule a publishing slot, **Then** the system refuses the request with an HTTP 4xx status and an explicit rejection message.
+1. **Given** a variant with `draft`, `needs_review`, or `rejected` status, **When** an attempt is made to schedule a publishing slot, **Then** the system refuses the request with an HTTP 4xx status (403 Forbidden) and an explicit rejection message.
 2. **Given** an approved variant, **When** a user schedules it for a specific timestamp, **Then** the system reserves a publishing slot and sets its status to `pending`.
-3. **Given** a rejected variant, **When** the editor enters rejection feedback, **Then** the variant status is updated to `rejected` with the reason recorded.
+3. **Given** a variant flagged with `needs_review` or `rejected`, **When** the editor edits and saves content changes, **Then** the variant status is reset to `draft` so it can be re-evaluated and approved.
+4. **Given** any variant, **When** the editor clicks "Verify Grounding", **Then** the system enqueues an asynchronous, idempotent verification worker (`VerifyGroundingWorker`) that audits claims and displays a real-time UI spinner until audit completion.
+5. **Given** a rejected variant, **When** the editor enters rejection feedback, **Then** the variant status is updated to `rejected` with the reason recorded.
 
 ---
 
@@ -102,8 +104,8 @@ As a growth marketer using AI-assisted copywriting, I want to receive dual candi
 - **FR-003**: System MUST store the ingested content as a single source of truth (`Post`), and all subsequent generation MUST read strictly from this stored copy.
 - **FR-004**: System MUST define and enforce platform constraint profiles (character length caps, maximum hashtags, tone guidelines) in domain validation rules.
 - **FR-005**: System MUST block any variant that violates a constraint profile from reaching review, returning explicit error messages naming the broken rules.
-- **FR-006**: System MUST enforce a strict review lifecycle: `draft` -> `approved` / `rejected` -> `published`.
-- **FR-007**: System MUST refuse scheduling requests for any variant in `draft` or `rejected` status, returning an HTTP 4xx error with an explanatory message.
+- **FR-006**: System MUST enforce a strict review lifecycle: `draft`, `needs_review` -> `approved` / `rejected` -> `published`. Saving edits on a flagged or rejected variant MUST reset its status to `draft`.
+- **FR-007**: System MUST refuse scheduling or immediate publishing requests for any variant in `draft`, `needs_review`, or `rejected` status, returning an HTTP 4xx error (403 Forbidden) with an explanatory message.
 - **FR-008**: System MUST provide a decoupled publisher interface (`SocialPublisher`) supporting at least one real free delivery target (Telegram) and two mock targets (MockX, MockLinkedIn).
 - **FR-009**: System MUST resolve publishing adapters dynamically from configuration so that changing delivery targets touches zero business logic.
 - **FR-010**: System MUST guarantee idempotent publication such that the same variant and scheduled slot cannot be published more than once, even under retries.
@@ -111,18 +113,18 @@ As a growth marketer using AI-assisted copywriting, I want to receive dual candi
 - **FR-012**: System MUST parse rate-limit `Retry-After` headers on HTTP 429 responses and snooze background retries for the requested duration.
 - **FR-013**: System MUST record every publish attempt (success, failure, rate limit) in a searchable audit history log with external IDs and error diagnostics.
 - **FR-014**: System MUST support generating dual A/B candidate variants per target platform.
-- **FR-015**: System MUST verify factual grounding of generated variants against source text and flag unsupported claims.
-- **FR-016**: System MUST track AI token consumption and calculate exact monetary cost per campaign.
+- **FR-015**: System MUST verify factual grounding of generated variants against source text and flag unsupported claims via an asynchronous, idempotent verification worker with live UI spinner states.
+- **FR-016**: System MUST track AI token consumption, calculate exact monetary cost per campaign using Decimal arithmetic, and compute a dynamic Grounding Pass Rate on the system analytics dashboard.
 - **FR-017**: System MUST maintain clean secret management, loading API tokens strictly from environment variables without committing credentials.
 
 ---
 
 ### Key Entities
 
-- **Post (Source of Truth)**: Represents the ingested blog article. Key attributes include title, body content, source type (`markdown` or `url`), source URL, and cumulative AI cost.
-- **Variant**: Represents a platform-specific social adaptation. Key attributes include platform name, content body, variant label (`A` or `B`), status (`draft`, `approved`, `rejected`, `published`), character count, and hashtag count.
+- **Post (Source of Truth)**: Represents the ingested blog article. Key attributes include title, body content, source type (`markdown` or `url`), source URL, cumulative AI cost, and SHA-256 `content_hash`.
+- **Variant**: Represents a platform-specific social adaptation. Key attributes include platform name, content body, variant label (`A` or `B`), status (`draft`, `needs_review`, `approved`, `rejected`, `published`), character count, hashtag count, and rejection reason.
 - **Publishing Slot**: Represents a reserved time window for publication. Key attributes include scheduled timestamp, slot status (`pending`, `published`, `failed`), and unique idempotency key.
-- **Publish Attempt (Audit Record)**: Represents an immutable dispatch execution record. Key attributes include timestamp, target adapter name, outcome status (`pending`, `success`, `failure`), external post identifier, and raw response/error payload.
+- **Publish Attempt (Audit Record)**: Represents an immutable dispatch execution record. Key attributes include timestamp, target adapter name, outcome status (`pending`, `success`, `failure`), external post identifier, and raw response/error payload. Protected by a partial unique index on `slot_id WHERE status = 'success'`.
 - **AI Generation Telemetry**: Represents an audit log of AI model usage. Key attributes include model identifier, prompt tokens, completion tokens, calculated cost, and grounding status.
 
 ---

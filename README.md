@@ -26,44 +26,61 @@ The application is organized around two Phoenix contexts and asynchronous worker
   rejected and already-published variants are refused.
 
 ```mermaid
-graph TD
-    User([User / API Client])
-    UI[Phoenix LiveView UI]
-
-    subgraph Content_Context[Content Context]
-        Ingest[Markdown / URL Ingestion]
-        Ground[Grounding Verifier]
+flowchart LR
+    %% Client & Ingress Layer
+    subgraph Ingress["Client Ingress"]
+        UI["LiveView UI"]
+        API["REST API & Scalar Docs"]
     end
 
-    subgraph Publishing_Context[Publishing Context]
-        Review[Review Gate and Scheduler]
-        Dispatcher[Idempotent Dispatcher]
+    %% Ingestion & Generation Pipeline
+    subgraph ContentPipeline["1. Ingestion & Grounding"]
+        direction TB
+        IngestEngine["Content Ingestion\n(Markdown or Web URL)"]
+        GenWorker["Oban: GenerateVariants\n(Gemini 2.5 Flash A/B)"]
+        AuditWorker["Grounding Audit\n(Factual Verification)"]
+        
+        IngestEngine --> GenWorker --> AuditWorker
     end
 
-    subgraph Infrastructure[Infrastructure and External Services]
-        DB[(PostgreSQL)]
-        Oban[Oban Job Queue]
-        Gemini[Gemini API]
-        Adapters[Social Platform Adapters]
-        PubSub[Phoenix PubSub]
+    %% Editorial & Review Layer
+    subgraph ReviewGate["2. Human Review Gate"]
+        direction TB
+        DraftReview["Editorial Workflow\n(draft ➔ approved or rejected)"]
+        SlotScheduler["Slot Scheduler\n(Refuses Unapproved: 403)"]
+        
+        DraftReview --> SlotScheduler
     end
 
-    User --> Ingest
-    User --> Review
-    UI --> Ingest
-    UI --> Review
-    Ingest --> DB
-    User --> Oban
-    Oban --> Gemini
-    Oban --> Ground
-    Ground --> Oban
-    Review --> DB
-    Review --> Oban
-    Oban --> Dispatcher
-    Dispatcher --> DB
-    Dispatcher --> Adapters
-    Oban --> PubSub
-    PubSub --> UI
+    %% Durable Dispatch & Publishing Pipeline
+    subgraph PublishPipeline["3. Durable Publishing"]
+        direction TB
+        PublishWorker["Oban: PublishWorker\n(Durable Queue & Snooze)"]
+        IdempotentDispatcher["Idempotent Dispatcher\n(Partial Unique Index)"]
+        
+        PublishWorker --> IdempotentDispatcher
+    end
+
+    %% Storage & External Adapters
+    subgraph Infrastructure["Infrastructure & Platform Adapters"]
+        direction TB
+        DB[("PostgreSQL\n(Posts, Slots, Attempts)")]
+        Telegram["Telegram Bot API\n(Real Live Target)"]
+        Mocks["Mock Platforms\n(MockX & MockLinkedIn)"]
+    end
+
+    %% Cross-Pipeline Connections
+    Ingress --> IngestEngine
+    Ingress --> DraftReview
+    Ingress --> SlotScheduler
+
+    IngestEngine -.->|Store Post| DB
+    AuditWorker -.->|Update Status| DB
+    SlotScheduler -->|Enqueue Job| PublishWorker
+    
+    IdempotentDispatcher -->|Verified Dispatch| Telegram
+    IdempotentDispatcher -->|Simulated Dispatch| Mocks
+    IdempotentDispatcher -.->|Audit History & Locks| DB
 ```
 
 Detailed sequence diagrams, failure handling, and focused test tags are maintained
@@ -120,20 +137,18 @@ The Compose configuration provides the database URL, Phoenix port, and database 
 
 ### Seed Sample Data
 
-To populate the database with a pre-configured sample blog post, platform variants in multiple lifecycle states (`approved`, `draft`, `published`), a scheduled slot, and audit history:
+To populate the database with a sample blog post, platform variants across lifecycle states (`approved`, `draft`, `published`), a scheduled slot, and audit history:
 
-**If running locally with Mix:**
 ```bash
 mix run priv/repo/seeds.exs
 ```
 
-**If running inside Docker:**
+When running in Docker, you can also execute the seed script against the database:
 ```bash
-docker compose exec web /app/bin/migrate seed
+docker compose run --rm web /app/bin/server eval "Code.eval_file(\"/app/lib/flyrank_capstone_social_studio-0.1.0/priv/repo/seeds.exs\")"
 ```
-*(Or via eval: `docker compose exec web /app/bin/server eval "FlyrankCapstoneSocialStudio.Release.seed"`)*
 
-Once seeded, you can view the campaign directly in the browser at `http://localhost:4000`, explore publishing history at `http://localhost:4000/publishing/history`, and check system telemetry at `http://localhost:4000/analytics`.
+Once seeded, you can view the campaign in your browser at `http://localhost:4000`, review publishing history at `http://localhost:4000/publishing/history`, and monitor telemetry at `http://localhost:4000/analytics`.
 
 ---
 

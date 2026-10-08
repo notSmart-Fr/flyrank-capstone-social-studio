@@ -86,28 +86,70 @@ sequenceDiagram
 | UI | Scheduled publish | Flash info | "Post scheduled for Jan 01, 2099 at 10:30 UTC" |
 | UI | Unparseable time | Falls back to now | No crash |
 | UI | Adapter failure | Flash error | "Dispatch failed", slot `failed` |
-| UI | Rejected or published variant | Refused before any slot is created | Flash error "Cannot publish a rejected variant. Review it first." |
+| UI | Needs review or rejected variant | Refused before any slot is created | Flash error "Cannot publish a variant under review or rejected. Review or edit it first." |
+| UI | Save edits on variant | Resets `needs_review` or `rejected` to `draft` | Editor can re-verify grounding or publish explicitly |
+| UI | Verify grounding button | Triggers async `VerifyGroundingWorker` | Real-time spinner until factual audit completes |
 | UI | Scheduling error | Flash error | "Publishing failed" |
 
 ## Design Notes
 
 - A draft published from the inspector counts as the reviewer's explicit approval and is
-  approved on the fly. Rejected and already-published variants are refused.
-- The Telegram base URL comes from `config :flyrank_capstone_social_studio,
-  :telegram_base_url` (default `https://api.telegram.org`), so tests point it at Bypass.
-  The adapter does not retry HTTP calls itself; Oban owns retries.
-## Focused Behavior Tests
+  approved on the fly. Variants in `needs_review`, `rejected`, or `published` state are refused.
+- Saving edits on any `needs_review` or `rejected` variant automatically transitions it to `draft`, enabling human-in-the-loop remediation before publishing.
+- The Telegram base URL comes from `config :flyrank_capstone_social_studio, :telegram_base_url` (default `https://api.telegram.org`), allowing tests to intercept calls via Bypass.
+- Oban owns retries and backoff. When an adapter returns an HTTP 429 rate limit with a `Retry-After` header, the worker parses the duration and returns `{:snooze, seconds}` to sleep dynamically.
+- The partial unique index on `publish_attempts (slot_id) WHERE status = 'success'` guarantees hardware-level idempotency under race conditions.
 
-Run the behavior tests by tag:
+## Focused Behavior Tests & Verified Transcripts
+
+Run the behavior tests by tag matching the proofs in `EVIDENCE.md`:
 
 ```bash
-mix test --only publishing        # everything in this guide
-mix test --only review_gate       # approval gate and HTTP 403
-mix test --only scheduling        # slots, jobs, auto spacing, past times
-mix test --only dispatch          # idempotency, claims, concurrency
-mix test --only publish_worker    # Oban worker and PubSub broadcasts
-mix test --only publish_history   # audit log
-mix test --only adapters          # adapter seam, mock adapters, Telegram via Bypass
-mix test --only publish_ui        # inspector publish modal
-mix test --only error_handling    # failure paths only
+mix test --only publishing        # full publishing suite (30+ tests)
+mix test --only review_gate       # approval gate and HTTP 403 (4/4 passed)
+mix test --only scheduling        # slots, jobs, auto spacing, past times (6/6 passed)
+mix test --only dispatch          # idempotency, claims, concurrency (7/7 passed)
+mix test --only publish_worker    # Oban worker, retries, snoozing, and PubSub (6/6 passed)
+mix test --only publish_history   # permanent audit log and error tracking (2/2 passed)
+mix test --only adapters          # adapter seam, mock adapters, Telegram via Bypass (12/12 passed)
+mix test --only publish_ui        # inspector publish modal and status gates
+mix test --only error_handling    # failure paths and timeout rescues
+```
+
+### Clean ExUnit Test Transcripts
+
+#### 1. Review Gate (`:review_gate`)
+```text
+mix test --only review_gate
+Running ExUnit with seed: 857547, max_cases: 24
+....
+Finished in 0.4 seconds (0.3s async, 0.1s sync)
+Result: 4 passed, 65 excluded
+```
+
+#### 2. Idempotent Dispatch (`:dispatch`)
+```text
+mix test --only dispatch
+Running ExUnit with seed: 600220, max_cases: 24
+.......
+Finished in 0.7 seconds (0.3s async, 0.4s sync)
+Result: 7 passed, 62 excluded
+```
+
+#### 3. Durable Worker & Rate-Limit Snooze (`:publish_worker`)
+```text
+mix test --only publish_worker
+Running ExUnit with seed: 436833, max_cases: 24
+......
+Finished in 0.6 seconds (0.3s async, 0.3s sync)
+Result: 6 passed, 65 excluded
+```
+
+#### 4. Platform Adapters Seam (`:adapters`)
+```text
+mix test --only adapters
+Running ExUnit with seed: 153099, max_cases: 24
+............
+Finished in 0.8 seconds (0.4s async, 0.4s sync)
+Result: 12 passed, 57 excluded
 ```
