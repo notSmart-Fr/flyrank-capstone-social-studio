@@ -28,12 +28,36 @@ import topbar from "../vendor/topbar"
 // Import Petal Components JS Hooks
 import PetalComponents from "../../deps/petal_components/assets/js/petal_components"
 
+const Toast = {
+  mounted() {
+    this.scheduleDismiss()
+    this.el.addEventListener("mouseenter", () => clearTimeout(this.timeout))
+    this.el.addEventListener("mouseleave", () => this.scheduleDismiss(3000))
+  },
+  destroyed() {
+    clearTimeout(this.timeout)
+  },
+  scheduleDismiss(delay = 5000) {
+    clearTimeout(this.timeout)
+    this.timeout = setTimeout(() => {
+      this.dismiss()
+    }, delay)
+  },
+  dismiss() {
+    this.el.classList.add("opacity-0", "translate-y-4", "transition-all", "duration-200")
+    setTimeout(() => {
+      const key = this.el.dataset.key
+      this.pushEvent("lv:clear-flash", {key: key})
+    }, 200)
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  // Merge colocatedHooks and PetalComponents hooks together
-  hooks: {...colocatedHooks, ...PetalComponents},
+  // Merge colocatedHooks, PetalComponents, and Toast hooks together
+  hooks: {...colocatedHooks, ...PetalComponents, Toast},
 })
 
 // Show progress bar on live navigation and form submits

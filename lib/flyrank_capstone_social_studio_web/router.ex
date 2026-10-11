@@ -60,12 +60,14 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
   scope "/", FlyrankCapstoneSocialStudioWeb do
     pipe_through :browser
 
-    # Route root directly to ContentLive.Index
-    live "/", ContentLive.Index, :index
-    live "/posts", ContentLive.Index, :index
-    live "/posts/:id", PostLive.Show, :show
-    live "/analytics", AnalyticsLive.Index, :index
-    live "/publishing/history", PublishingHistoryLive, :index
+    live_session :default, on_mount: [FlyrankCapstoneSocialStudioWeb.GlobalNotifications] do
+      # Route root directly to ContentLive.Index
+      live "/", ContentLive.Index, :index
+      live "/posts", ContentLive.Index, :index
+      live "/posts/:id", PostLive.Show, :show
+      live "/analytics", AnalyticsLive.Index, :index
+      live "/publishing/history", PublishingHistoryLive, :index
+    end
 
     # Live_dashboard route for system monitoring
     live_dashboard "/dashboard", metrics: FlyrankCapstoneSocialStudioWeb.Telemetry

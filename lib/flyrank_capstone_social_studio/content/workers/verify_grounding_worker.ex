@@ -28,6 +28,12 @@ defmodule FlyrankCapstoneSocialStudio.Content.Workers.VerifyGroundingWorker do
       {:ok, updated_variant} ->
         PubSub.broadcast(
           FlyrankCapstoneSocialStudio.PubSub,
+          "grounding:events",
+          {:grounding_verified, updated_variant}
+        )
+
+        PubSub.broadcast(
+          FlyrankCapstoneSocialStudio.PubSub,
           "post:#{variant.post_id}",
           {:grounding_verified, updated_variant}
         )
@@ -35,6 +41,12 @@ defmodule FlyrankCapstoneSocialStudio.Content.Workers.VerifyGroundingWorker do
         :ok
 
       {:error, reason} ->
+        PubSub.broadcast(
+          FlyrankCapstoneSocialStudio.PubSub,
+          "grounding:events",
+          {:grounding_verification_failed, %{variant_id: variant_id, reason: inspect(reason)}}
+        )
+
         PubSub.broadcast(
           FlyrankCapstoneSocialStudio.PubSub,
           "post:#{variant.post_id}",

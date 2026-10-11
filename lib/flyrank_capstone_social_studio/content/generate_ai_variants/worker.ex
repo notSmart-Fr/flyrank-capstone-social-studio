@@ -23,6 +23,13 @@ defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Worker do
       {:ok, %{variant_a: draft_a, variant_b: draft_b}} ->
         PubSub.broadcast(
           FlyrankCapstoneSocialStudio.PubSub,
+          "ai_generation:events",
+          {:ai_generation_complete,
+           %{post_id: post_id, platform: platform, a: draft_a, b: draft_b}}
+        )
+
+        PubSub.broadcast(
+          FlyrankCapstoneSocialStudio.PubSub,
           "post:#{post_id}",
           {:ai_generation_complete, %{platform: platform, a: draft_a, b: draft_b}}
         )
@@ -30,6 +37,13 @@ defmodule FlyrankCapstoneSocialStudio.Content.GenerateAiVariants.Worker do
         :ok
 
       {:error, reason} ->
+        PubSub.broadcast(
+          FlyrankCapstoneSocialStudio.PubSub,
+          "ai_generation:events",
+          {:ai_generation_failed,
+           %{post_id: post_id, platform: platform, reason: inspect(reason)}}
+        )
+
         PubSub.broadcast(
           FlyrankCapstoneSocialStudio.PubSub,
           "post:#{post_id}",
