@@ -1,0 +1,249 @@
+<div class="space-y-8">
+  <!-- Header -->
+  <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
+    <div>
+      <.h2 class="text-gray-900 dark:text-white font-bold text-2xl">Publishing Audit Trail</.h2>
+      <.p class="text-sm text-gray-500 dark:text-gray-400 mt-1">
+        Immutable execution log of every social media dispatch, rate-limit snooze, defense-in-depth constraint guard, and adapter payload.
+      </.p>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <.badge color="success" variant="soft" class="text-xs">
+        ● Live PubSub Streaming
+      </.badge>
+      <.link navigate={~p"/posts"} class="text-xs font-semibold text-primary-600 hover:underline">
+        ← Back to Studio
+      </.link>
+    </div>
+  </header>
+
+  <!-- Attempts Table -->
+  <section aria-labelledby="audit-table-heading" class="space-y-4">
+    <h3 id="audit-table-heading" class="sr-only">Publication Attempts</h3>
+
+    <.card class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 overflow-hidden shadow-sm">
+      <.table class="w-full text-left text-sm">
+        <thead class="bg-gray-50 dark:bg-gray-950 border-b border-gray-200 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400 uppercase font-semibold">
+          <tr>
+            <th scope="col" class="px-6 py-3.5">Attempted At</th>
+            <th scope="col" class="px-6 py-3.5">Post / Campaign</th>
+            <th scope="col" class="px-6 py-3.5">Platform</th>
+            <th scope="col" class="px-6 py-3.5">Status</th>
+            <th scope="col" class="px-6 py-3.5">External ID</th>
+            <th scope="col" class="px-6 py-3.5 text-right">Actions</th>
+          </tr>
+        </thead>
+
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-800 text-gray-700 dark:text-gray-300">
+          <%= if Enum.empty?(@attempts) do %>
+            <tr>
+              <td colspan="6" class="px-6 py-12 text-center text-gray-400 text-sm">
+                <.icon name="hero-archive-box-micro" class="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p class="font-medium text-gray-500">No publishing attempts recorded yet.</p>
+                <p class="text-xs text-gray-400 mt-1">
+                  Schedule and publish a post in the Studio to see live audit logs.
+                </p>
+              </td>
+            </tr>
+          <% else %>
+            <%= for attempt <- @attempts do %>
+              <tr
+                id={"attempt-row-#{attempt.id}"}
+                class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <!-- Timestamp -->
+                <td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  {FlyrankCapstoneSocialStudioWeb.PublishingHistoryLive.format_datetime(
+                    attempt.inserted_at
+                  )}
+                </td>
+
+                <!-- Post Title -->
+                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white max-w-xs truncate">
+                  <%= if attempt.slot && attempt.slot.variant && attempt.slot.variant.post do %>
+                    <.link
+                      navigate={~p"/posts/#{attempt.slot.variant.post.id}"}
+                      class="hover:text-primary-600 hover:underline"
+                    >
+                      {attempt.slot.variant.post.title}
+                    </.link>
+                  <% else %>
+                    <span class="text-gray-400 italic">Direct Dispatch</span>
+                  <% end %>
+                </td>
+
+                <!-- Platform -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <% platform =
+                    (attempt.slot && attempt.slot.variant && attempt.slot.variant.platform) ||
+                      "telegram" %>
+                  <.badge
+                    color={
+                      FlyrankCapstoneSocialStudioWeb.PublishingHistoryLive.platform_badge_color(
+                        platform
+                      )
+                    }
+                    variant="outline"
+                    class="text-xs"
+                  >
+                    {FlyrankCapstoneSocialStudioWeb.PublishingHistoryLive.platform_name(platform)}
+                  </.badge>
+                </td>
+
+                <!-- Status -->
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <.badge
+                    color={
+                      FlyrankCapstoneSocialStudioWeb.PublishingHistoryLive.status_badge_color(
+                        attempt.status
+                      )
+                    }
+                    variant="soft"
+                    class="capitalize font-semibold text-xs"
+                  >
+                    <%= if attempt.status == "success" do %>
+                      ✓ Published
+                    <% else %>
+                      <%= if attempt.status == "failure" do %>
+                        ✕ Failed
+                      <% else %>
+                        ● {attempt.status}
+                      <% end %>
+                    <% end %>
+                  </.badge>
+                </td>
+
+                <!-- External Post ID -->
+                <td class="px-6 py-4 font-mono text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                  <%= if attempt.external_post_id do %>
+                    <span class="bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-800 dark:text-gray-200">
+                      {attempt.external_post_id}
+                    </span>
+                  <% else %>
+                    <span class="text-gray-400">—</span>
+                  <% end %>
+                </td>
+
+                <!-- Actions -->
+                <td class="px-6 py-4 text-right whitespace-nowrap">
+                  <button
+                    id={"inspect-attempt-#{attempt.id}"}
+                    phx-click="inspect-attempt"
+                    phx-value-id={attempt.id}
+                    class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 transition-colors"
+                  >
+                    <.icon name="hero-eye-micro" class="w-3.5 h-3.5" /> Inspect
+                  </button>
+                </td>
+              </tr>
+            <% end %>
+          <% end %>
+        </tbody>
+      </.table>
+    </.card>
+  </section>
+
+  <!-- Inspection Modal / Slide-over Details -->
+  <%= if @selected_attempt do %>
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-6">
+        <!-- Modal Header -->
+        <div class="flex items-start justify-between border-b border-gray-100 dark:border-gray-800 pb-4">
+          <div>
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <span>Attempt #{inspect(@selected_attempt.id)} Details</span>
+              <.badge
+                color={
+                  FlyrankCapstoneSocialStudioWeb.PublishingHistoryLive.status_badge_color(
+                    @selected_attempt.status
+                  )
+                }
+                variant="soft"
+                class="text-xs"
+              >
+                {@selected_attempt.status}
+              </.badge>
+            </h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Executed via adapter:
+              <code class="font-mono text-primary-600 dark:text-primary-400">{@selected_attempt.adapter_name}</code>
+            </p>
+          </div>
+
+          <button
+            type="button"
+            phx-click="close-modal"
+            class="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            <.icon name="hero-x-mark" class="w-5 h-5" />
+          </button>
+        </div>
+
+        <!-- Details Grid -->
+        <div class="grid grid-cols-2 gap-4 text-xs">
+          <div>
+            <span class="text-gray-400 block font-medium">Attempt Timestamp</span>
+            <span class="font-mono text-gray-900 dark:text-white">
+              {FlyrankCapstoneSocialStudioWeb.PublishingHistoryLive.format_datetime(
+                @selected_attempt.inserted_at
+              )}
+            </span>
+          </div>
+
+          <div>
+            <span class="text-gray-400 block font-medium">External ID</span>
+            <span class="font-mono text-gray-900 dark:text-white">
+              {@selected_attempt.external_post_id ||
+                "None (Failed prior to external confirmation)"}
+            </span>
+          </div>
+
+          <%= if @selected_attempt.slot do %>
+            <div>
+              <span class="text-gray-400 block font-medium">Slot Idempotency Key</span>
+              <span class="font-mono text-gray-900 dark:text-white truncate block">
+                {@selected_attempt.slot.idempotency_key}
+              </span>
+            </div>
+
+            <div>
+              <span class="text-gray-400 block font-medium">Slot Status</span>
+              <span class="capitalize text-gray-900 dark:text-white font-medium">
+                {@selected_attempt.slot.status}
+              </span>
+            </div>
+          <% end %>
+        </div>
+
+        <!-- Error / Constraint Violation Diagnostic Block -->
+        <%= if @selected_attempt.error_message do %>
+          <div class="space-y-1.5">
+            <span class="text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-1.5">
+              <.icon name="hero-exclamation-triangle-micro" class="w-4 h-4" />
+              Diagnostic Payload / Constraint Violation
+            </span>
+            <pre class="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 rounded-lg p-3.5 text-xs font-mono overflow-x-auto whitespace-pre-wrap">{@selected_attempt.error_message}</pre>
+          </div>
+        <% end %>
+
+        <!-- Response Payload -->
+        <%= if @selected_attempt.response_payload && map_size(@selected_attempt.response_payload) > 0 do %>
+          <div class="space-y-1.5">
+            <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">
+              Raw Adapter Response Payload
+            </span>
+            <pre class="bg-gray-950 text-gray-100 rounded-lg p-3.5 text-xs font-mono overflow-x-auto">{Jason.encode!(@selected_attempt.response_payload, pretty: true)}</pre>
+          </div>
+        <% end %>
+
+        <!-- Modal Footer -->
+        <div class="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-end">
+          <.button color="light" phx-click="close-modal" class="text-xs">
+            Close
+          </.button>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>

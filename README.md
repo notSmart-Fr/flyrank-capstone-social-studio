@@ -173,11 +173,19 @@ All REST endpoints support standard JSON payloads and return descriptive error s
 | `POST` | `/api/variants/:id/approve` | Approves a variant for scheduling. |
 | `POST` | `/api/variants/:id/reject` | Rejects a variant with a reason. |
 | `POST` | `/api/variants/:id/schedule` | Schedules an approved variant (returns 403 for unapproved). |
-| `GET` | `/api/campaigns/:id` | Returns campaign details with variants and slots. |
-| `POST` | `/api/slots/:id/publish` | Triggers immediate idempotent dispatch with pre-publish guard. |
-| `GET` | `/api/publishing/history` | Returns the immutable audit history of publication attempts. |
+| `POST` | `/api/slots/:id/publish` | Triggers immediate idempotent dispatch with pre-publish defense-in-depth guard. |
+| `GET` | `/api/publishing/history` | Returns the immutable audit history of publication attempts with error payloads. |
+| `GET` | `/api/health` | System and database connectivity health check. |
 
-Interactive API documentation and schema exploration are accessible via Scalar at `http://localhost:4000/api/scalar`.
+### Web Studio & UI Pages
+
+| URL | View | Description |
+| --- | --- | --- |
+| `http://localhost:4000/` | **Studio** (`ContentLive.Index`) | Ingest blog posts, view campaigns, and trigger AI variant generation. |
+| `http://localhost:4000/posts/:id` | **Post Inspector** (`PostLive.Show`) | Inspect A/B variants, run grounding audits, review/edit content, and schedule slots. |
+| `http://localhost:4000/publishing/history` | **Audit Logs** (`PublishingHistoryLive`) | Interactive audit log table with real-time PubSub streaming, status badges, and diagnostic payload inspection modal. |
+| `http://localhost:4000/analytics` | **Analytics** (`AnalyticsLive.Index`) | Real-time AI token costs, ingestion throughput, and grounding pass rate metrics. |
+| `http://localhost:4000/api/scalar` | **Scalar API Reference** | Interactive OpenAPI 3.0 documentation and endpoint sandbox. |
 
 ---
 

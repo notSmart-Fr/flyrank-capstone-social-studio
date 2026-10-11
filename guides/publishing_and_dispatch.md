@@ -124,7 +124,7 @@ sequenceDiagram
 - **Editorial Remediation:** Saving edits on any `needs_review` or `rejected` variant automatically transitions it back to `draft`, enabling human re-evaluation before approval.
 - **Pluggable Adapter Seam:** The dispatcher resolves adapter modules dynamically from application configuration (`Publishing.adapter_for_platform/1`), allowing seamless swapping between real adapters and local mocks (`MockX`, `MockLinkedIn`).
 - **Dynamic Snooze on Rate Limits:** When an adapter returns an HTTP 429 rate limit with a `Retry-After` header, the worker returns `{:snooze, seconds}` to sleep dynamically rather than burning retry attempts.
-- **Hardware-Level Idempotency:** The partial unique index on `publish_attempts (slot_id) WHERE status = 'success'` guarantees that concurrent workers or network retries never produce duplicate external posts.
+- **Publishing History & Diagnostics UI:** Mounted at `/publishing/history` (`PublishingHistoryLive`), providing real-time streaming of all dispatch attempts. Clicking "Inspect" opens a diagnostic drawer/modal revealing the adapter name, exact attempt timestamp, slot idempotency key, external post ID, raw adapter JSON payloads, and pre-publish guard violation details.
 
 ---
 
@@ -133,7 +133,15 @@ sequenceDiagram
 Run the behavior tests matching the test suites:
 
 ```bash
+# Publishing and pre-publish defense-in-depth dispatch tests
 mix test test/flyrank_capstone_social_studio/publishing_test.exs
+
+# Adapter seam, mock adapters, and Telegram HTTP / rate-limit tests
 mix test test/flyrank_capstone_social_studio/adapter_test.exs
+
+# Publishing History LiveView UI tests (rendering, modal inspection, PubSub streaming)
+mix test test/flyrank_capstone_social_studio_web/live/publishing_history_live_test.exs
+
+# Content ingestion and constraint profile tests
 mix test test/flyrank_capstone_social_studio/content_test.exs
 ```

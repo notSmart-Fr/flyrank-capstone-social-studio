@@ -8,10 +8,10 @@
           <div class="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center text-white font-bold">
             F
           </div>
-          
+
           <span class="font-bold text-lg text-gray-900 dark:text-white">Flyrank Social Studio</span>
         </.link>
-        
+
         <.badge color="success" variant="outline" class="text-xs">
           ● System Online
         </.badge>
@@ -24,7 +24,14 @@
         >
           Studio
         </.link>
-        
+
+        <.link
+          navigate={~p"/publishing/history"}
+          class="text-sm font-medium text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400"
+        >
+          Audit Logs
+        </.link>
+
         <.link
           navigate={~p"/analytics"}
           class="text-sm font-medium text-gray-600 hover:text-primary-600 dark:text-gray-300 dark:hover:text-primary-400"
@@ -49,33 +56,84 @@
 <!-- Main App Container with Top/Bottom Margin and Side Padding -->
 <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
   <div class="w-full">
+    <!-- Floating Toaster Container (Fixed bottom-right so it never pushes the page or causes layout shifts) -->
     <%= if @flash && map_size(@flash) > 0 do %>
-      <div class="mb-6 space-y-3">
+      <div
+        id="flash-toaster-group"
+        class="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-md w-full pointer-events-none"
+      >
         <%= for {kind, message} <- @flash do %>
-          <div class={[
-            "rounded-lg border px-4 py-3 text-sm",
-            kind == "info" &&
-              "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300",
-            kind == "error" &&
-              "border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300",
-            kind == "warning" &&
-              "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
-            kind == "success" &&
-              "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-          ]}>
-            {message}
+          <div
+            id={"flash-toast-#{kind}"}
+            role="alert"
+            class={[
+              "pointer-events-auto flex items-start gap-3 p-4 rounded-xl border shadow-xl backdrop-blur-md text-sm transition-all animate-in fade-in slide-in-from-bottom-5 duration-200",
+              kind == "info" &&
+                "border-blue-200 dark:border-blue-800 bg-white/95 dark:bg-gray-900/95 text-blue-900 dark:text-blue-100 shadow-blue-500/10",
+              kind == "error" &&
+                "border-red-200 dark:border-red-800 bg-white/95 dark:bg-gray-900/95 text-red-900 dark:text-red-100 shadow-red-500/10",
+              kind == "warning" &&
+                "border-amber-200 dark:border-amber-800 bg-white/95 dark:bg-gray-900/95 text-amber-900 dark:text-amber-100 shadow-amber-500/10",
+              kind == "success" &&
+                "border-emerald-200 dark:border-emerald-800 bg-white/95 dark:bg-gray-900/95 text-emerald-900 dark:text-emerald-100 shadow-emerald-500/10"
+            ]}
+          >
+            <!-- Toast Icon -->
+            <div class="shrink-0 mt-0.5">
+              <%= case kind do %>
+                <% "info" -> %>
+                  <.icon
+                    name="hero-information-circle-micro"
+                    class="w-5 h-5 text-blue-600 dark:text-blue-400"
+                  />
+                <% "error" -> %>
+                  <.icon
+                    name="hero-exclamation-circle-micro"
+                    class="w-5 h-5 text-red-600 dark:text-red-400"
+                  />
+                <% "warning" -> %>
+                  <.icon
+                    name="hero-exclamation-triangle-micro"
+                    class="w-5 h-5 text-amber-600 dark:text-amber-400"
+                  />
+                <% "success" -> %>
+                  <.icon
+                    name="hero-check-circle-micro"
+                    class="w-5 h-5 text-emerald-600 dark:text-emerald-400"
+                  />
+                <% _ -> %>
+                  <.icon name="hero-bell-micro" class="w-5 h-5 text-gray-600 dark:text-gray-400" />
+              <% end %>
+            </div>
+
+            <!-- Toast Body -->
+            <div class="flex-1 text-xs font-medium leading-relaxed">
+              {message}
+            </div>
+
+            <!-- Dismiss Button -->
+            <button
+              type="button"
+              phx-click="lv:clear-flash"
+              phx-value-key={kind}
+              aria-label="Close notification"
+              class="shrink-0 -mr-1 -mt-1 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            >
+              <.icon name="hero-x-mark-micro" class="w-4 h-4" />
+            </button>
           </div>
         <% end %>
       </div>
     <% end %>
-     {@inner_content}
+
+    {@inner_content}
   </div>
 </main>
 <!-- Footer -->
 <footer class="border-t border-gray-200 dark:border-gray-800 bg-white/95 dark:bg-gray-900 py-6 mt-12">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 dark:text-gray-400 gap-2">
     <p>© 2026 Flyrank Social Studio. All rights reserved.</p>
-    
+
     <div class="flex items-center gap-4">
       <span>Built with Elixir & Phoenix LiveView 1.0</span>
     </div>

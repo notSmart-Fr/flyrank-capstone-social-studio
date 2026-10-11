@@ -229,6 +229,51 @@ components:
           example: auto
           description: Mode strategy. 'manual' uses explicit scheduled_at; 'auto' calculates next optimal gap.
 
+    # --------------------------------------------------------------------------
+    # OUTPUT MODEL: Publication Attempt Audit Record
+    # --------------------------------------------------------------------------
+    PublishAttempt:
+      type: object
+      description: Represents an immutable audit log entry of a publication dispatch attempt.
+      properties:
+        id:
+          type: integer
+          example: 105
+          description: Primary key ID of the attempt
+        slot_id:
+          type: integer
+          example: 42
+          description: ID of the targeted publishing slot
+        platform:
+          type: string
+          example: telegram
+          description: Social media platform target
+        status:
+          type: string
+          enum: [pending, success, failure]
+          example: success
+          description: Outcome status of the dispatch attempt
+        attempted_at:
+          type: string
+          format: date-time
+          example: "2026-09-20T10:00:02Z"
+          description: Timestamp when the dispatch attempt was executed
+        external_post_id:
+          type: string
+          nullable: true
+          example: "tg_msg_984729"
+          description: External ID returned by the target platform upon confirmation
+        error_message:
+          type: string
+          nullable: true
+          example: "Constraint violation at publish time: [:content_too_long]"
+          description: Diagnostic error message or pre-publish guard rejection reason
+        raw_response:
+          type: string
+          nullable: true
+          example: "Message delivered successfully"
+          description: Raw response payload or confirmation summary from the platform adapter
+
 # ==============================================================================
 # API ROUTE MAPPINGS
 # ==============================================================================
@@ -454,6 +499,15 @@ paths:
       responses:
         '200':
           description: PublishAttempt history records retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PublishAttempt'
 
   # ----------------------------------------------------------------------------
   # SYSTEM HEALTH

@@ -167,7 +167,7 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   def list_history do
     from(pa in PublishAttempt,
       order_by: [desc: pa.inserted_at],
-      preload: [slot: :variant]
+      preload: [slot: [variant: :post]]
     )
     |> Repo.all()
   end
@@ -199,7 +199,12 @@ defmodule FlyrankCapstoneSocialStudio.Publishing do
   # ===========================================================================
 
   def list_publish_attempts, do: Repo.all(PublishAttempt)
-  def get_publish_attempt!(id), do: Repo.get!(PublishAttempt, id)
+
+  def get_publish_attempt!(id) do
+    PublishAttempt
+    |> Repo.get!(id)
+    |> Repo.preload(slot: [variant: :post])
+  end
 
   def create_publish_attempt(attrs) do
     %PublishAttempt{}

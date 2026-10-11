@@ -65,6 +65,7 @@ defmodule FlyrankCapstoneSocialStudioWeb.Router do
     live "/posts", ContentLive.Index, :index
     live "/posts/:id", PostLive.Show, :show
     live "/analytics", AnalyticsLive.Index, :index
+    live "/publishing/history", PublishingHistoryLive, :index
 
     # Live_dashboard route for system monitoring
     live_dashboard "/dashboard", metrics: FlyrankCapstoneSocialStudioWeb.Telemetry
