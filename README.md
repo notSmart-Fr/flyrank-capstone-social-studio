@@ -189,6 +189,103 @@ All REST endpoints support standard JSON payloads and return descriptive error s
 
 ---
 
+## Operational Scenarios & Resilience Guarantees
+
+### 1. Human-in-the-Loop Review Gate (Approval Enforcement)
+The system enforces that unapproved variants (`draft`, `needs_review`, or `rejected`) cannot be scheduled or published.
+
+#### Attempting to Schedule an Unapproved Variant:
+```bash
+curl -i -X POST http://localhost:4000/api/variants/b3e21820-21a4-4a6c-b3a1-7e7939c36209/schedule \
+  -H "Content-Type: application/json" \
+  -d '{"scheduled_at": "2026-10-20T14:00:00Z"}'
+```
+
+#### HTTP Response (Boundary Refusal):
+```http
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
+
+{
+  "error": "unapproved_variant",
+  "message": "Only approved variants can be scheduled."
+}
+```
+
+---
+
+### 2. Idempotent Publishing & Retries
+
+Duplicate publishes to the same slot are prevented at the database layer via a PostgreSQL partial unique index:
+
+```sql
+CREATE UNIQUE INDEX publish_attempts_active_slot_index 
+ON publish_attempts (slot_id) 
+WHERE status IN ('pending', 'success');
+```
+
+#### First Dispatch:
+```bash
+curl -i -X POST http://localhost:4000/api/slots/7f9188a2-d8c9-445b-a81d-bca541913165/publish
+```
+
+```http
+HTTP/1.1 200 OK
+{
+  "status": "success",
+  "slot_id": "7f9188a2-d8c9-445b-a81d-bca541913165",
+  "external_id": "telegram-msg-9142"
+}
+```
+
+#### Immediate Repeated Call / Network Retry:
+```bash
+curl -i -X POST http://localhost:4000/api/slots/7f9188a2-d8c9-445b-a81d-bca541913165/publish
+```
+
+```http
+HTTP/1.1 200 OK
+{
+  "status": "already_published",
+  "slot_id": "7f9188a2-d8c9-445b-a81d-bca541913165",
+  "external_id": "telegram-msg-9142",
+  "note": "Short-circuited without invoking external adapter."
+}
+```
+
+---
+
+### 3. Worker Mid-Batch Crash & Recovery Scenario
+
+What happens when a background worker (`PublishWorker`) crashes or restarts mid-batch (e.g., node OOM, container restart, or network interruption):
+
+```text
+[ Worker 1 dequeues Slot A ] ──► Posts to Telegram (External success)
+                                          │
+                                   [ CRASH / SIGKILL ]
+                                (Worker dies before updating DB)
+                                          │
+[ Container Restarts / Oban resumes ]
+                                          │
+[ Worker 2 picks up Slot A (retry) ] ──► Queries Slot state & checks `publish_attempts`
+                                          │
+                                 ┌────────┴────────┐
+                                 │                 │
+                Existing success attempt found?    Constraint violation raised?
+                                 │                 │
+                                 └────────┬────────┘
+                                          ▼
+                         [ Short-circuit & Mark Completed ]
+                         Zero duplicate messages sent.
+```
+
+1. **Durable Queues:** Oban stores job states in PostgreSQL (`oban_jobs`), persisting queued work across crashes and restarts.
+2. **Deterministic Constraint:** If the worker crashed after Telegram received the message, the PostgreSQL partial unique index on `publish_attempts (slot_id) WHERE status IN ('pending', 'success')` blocks duplicate records.
+3. **Recovery Execution:** When the recovered worker runs, it checks whether a success record exists for `slot_id`. Seeing the existing attempt, it immediately transitions the slot to `published` without calling the network adapter a second time.
+4. **Rate Limit Handling (HTTP 429):** If Telegram returns an HTTP 429 with a `Retry-After: 30` header, the worker returns `{:snooze, 30}`, instructing Oban to delay execution for 30 seconds rather than failing or re-executing immediately.
+
+---
+
 ## Automated Verification & Testing
 
 The application is thoroughly verified using ExUnit:
